@@ -3,6 +3,7 @@ set -euo pipefail
 
 DRY_RUN=0
 AUTO_DETECT=1
+INTERACTIVE=-1
 
 SSH_MODE="auto"
 NGINX_MODE="auto"
@@ -91,6 +92,14 @@ install_fail2ban() {
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --interactive)
+        INTERACTIVE=1
+        shift
+        ;;
+      --non-interactive)
+        INTERACTIVE=0
+        shift
+        ;;
       --auto)
         AUTO_DETECT=1
         shift
@@ -170,6 +179,8 @@ Usage:
   sudo bash setup-fail2ban.sh [options]
 
 Options:
+  --interactive             Start interactive wizard (prompts for all major settings)
+  --non-interactive         Disable interactive wizard
   --auto / --no-auto         Enable or disable automatic service detection (default: --auto)
   --ssh / --no-ssh           Force-enable or disable SSH hardening
   --nginx / --no-nginx       Force-enable or disable Nginx hardening jails
@@ -186,6 +197,7 @@ Options:
   -h, --help                 Show this help
 
 Examples:
+  sudo bash setup-fail2ban.sh --interactive
   sudo bash setup-fail2ban.sh
   sudo bash setup-fail2ban.sh --nginx --wordpress
   sudo bash setup-fail2ban.sh --no-auto --ssh --apache
@@ -197,6 +209,155 @@ EOF
         ;;
     esac
   done
+}
+
+stdin_is_tty() {
+  [[ -t 0 && -t 1 ]]
+}
+
+prompt_yes_no() {
+  local label="$1"
+  local default="$2"
+  local var_name="$3"
+  local input prompt_hint default_word
+
+  if [[ "$default" -eq 1 ]]; then
+    prompt_hint="Y/n"
+    default_word="yes"
+  else
+    prompt_hint="y/N"
+    default_word="no"
+  fi
+
+  while true; do
+    printf '%s [%s]: ' "$label" "$prompt_hint"
+    IFS= read -r input || die "Input aborted."
+    input="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]')"
+    [[ -z "$input" ]] && input="$default_word"
+
+    case "$input" in
+      y|yes|1|true)
+        printf -v "$var_name" '%s' "1"
+        return 0
+        ;;
+      n|no|0|false)
+        printf -v "$var_name" '%s' "0"
+        return 0
+        ;;
+      *)
+        echo "Please answer yes or no."
+        ;;
+    esac
+  done
+}
+
+prompt_mode() {
+  local label="$1"
+  local var_name="$2"
+  local detected="$3"
+  local current input detected_hint
+
+  current="${!var_name}"
+  if [[ "$detected" -eq 1 ]]; then
+    detected_hint="detected"
+  else
+    detected_hint="not detected"
+  fi
+
+  while true; do
+    printf '%s [auto/on/off] (default: %s, %s): ' "$label" "$current" "$detected_hint"
+    IFS= read -r input || die "Input aborted."
+    input="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]')"
+    [[ -z "$input" ]] && input="$current"
+
+    case "$input" in
+      auto|on|off)
+        printf -v "$var_name" '%s' "$input"
+        return 0
+        ;;
+      *)
+        echo "Please enter auto, on, or off."
+        ;;
+    esac
+  done
+}
+
+prompt_string() {
+  local label="$1"
+  local var_name="$2"
+  local current input
+
+  current="${!var_name}"
+  printf '%s (default: %s): ' "$label" "$current"
+  IFS= read -r input || die "Input aborted."
+  [[ -z "$input" ]] && input="$current"
+  printf -v "$var_name" '%s' "$input"
+}
+
+prompt_integer() {
+  local label="$1"
+  local var_name="$2"
+  local current input
+
+  current="${!var_name}"
+  while true; do
+    printf '%s (default: %s): ' "$label" "$current"
+    IFS= read -r input || die "Input aborted."
+    [[ -z "$input" ]] && input="$current"
+    if [[ "$input" =~ ^[0-9]+$ ]]; then
+      printf -v "$var_name" '%s' "$input"
+      return 0
+    fi
+    echo "Please enter an integer."
+  done
+}
+
+run_interactive_wizard() {
+  local ssh_detected="$1"
+  local nginx_detected="$2"
+  local apache_detected="$3"
+  local wordpress_detected="$4"
+  local nextcloud_detected="$5"
+  local proceed=1
+
+  echo
+  echo "=== Fail2ban Interactive Setup ==="
+  echo "Detected services: ssh=$ssh_detected nginx=$nginx_detected apache=$apache_detected wordpress=$wordpress_detected nextcloud=$nextcloud_detected"
+  echo
+
+  prompt_yes_no "Enable auto detection for 'auto' modes?" "$AUTO_DETECT" AUTO_DETECT
+  prompt_mode "SSH hardening mode" SSH_MODE "$ssh_detected"
+  prompt_mode "Nginx hardening mode" NGINX_MODE "$nginx_detected"
+  prompt_mode "Apache hardening mode" APACHE_MODE "$apache_detected"
+  prompt_mode "WordPress hardening mode" WORDPRESS_MODE "$wordpress_detected"
+  prompt_mode "Nextcloud hardening mode" NEXTCLOUD_MODE "$nextcloud_detected"
+  prompt_string "Default bantime (example: 1h, 12h, 1d)" BANTIME
+  prompt_string "Default findtime (example: 10m, 30m, 1h)" FINDTIME
+  prompt_integer "Default maxretry" MAXRETRY
+  prompt_string "Ignore IPs (space- or comma-separated)" IGNORE_IPS
+  IGNORE_IPS="${IGNORE_IPS//,/ }"
+  prompt_yes_no "Run in dry-run mode?" "$DRY_RUN" DRY_RUN
+
+  echo
+  echo "Summary:"
+  echo "  AUTO_DETECT=$AUTO_DETECT"
+  echo "  SSH_MODE=$SSH_MODE"
+  echo "  NGINX_MODE=$NGINX_MODE"
+  echo "  APACHE_MODE=$APACHE_MODE"
+  echo "  WORDPRESS_MODE=$WORDPRESS_MODE"
+  echo "  NEXTCLOUD_MODE=$NEXTCLOUD_MODE"
+  echo "  BANTIME=$BANTIME"
+  echo "  FINDTIME=$FINDTIME"
+  echo "  MAXRETRY=$MAXRETRY"
+  echo "  IGNORE_IPS=$IGNORE_IPS"
+  echo "  DRY_RUN=$DRY_RUN"
+  echo
+
+  prompt_yes_no "Apply this configuration now?" 1 proceed
+  if [[ "$proceed" -ne 1 ]]; then
+    log "Aborted by user."
+    exit 0
+  fi
 }
 
 service_active_or_enabled() {
@@ -575,6 +736,7 @@ validate_and_reload_fail2ban() {
 }
 
 main() {
+  local arg_count="$#"
   local ssh_detected=0 nginx_detected=0 apache_detected=0 wordpress_detected=0 nextcloud_detected=0
   local ssh_enabled=0 nginx_enabled=0 apache_enabled=0 wordpress_enabled=0 nextcloud_enabled=0
   local nginx_http_auth_enabled=0 nginx_botsearch_enabled=0
@@ -593,8 +755,19 @@ main() {
   local -a nextcloud_logs=()
 
   parse_args "$@"
+  if [[ "$INTERACTIVE" -eq -1 ]]; then
+    if [[ "$arg_count" -eq 0 ]] && stdin_is_tty; then
+      INTERACTIVE=1
+    else
+      INTERACTIVE=0
+    fi
+  fi
+
+  if [[ "$INTERACTIVE" -eq 1 ]] && ! stdin_is_tty; then
+    die "Interactive mode requested but no interactive TTY is available."
+  fi
+
   need_root
-  install_fail2ban
 
   detect_ssh && ssh_detected=1 || true
   detect_nginx && nginx_detected=1 || true
@@ -614,6 +787,12 @@ main() {
   mapfile -t apache_access_logs < <(get_apache_access_logs)
   mapfile -t apache_error_logs < <(get_apache_error_logs)
   mapfile -t web_access_logs < <(collect_existing_paths "${nginx_access_logs[@]}" "${apache_access_logs[@]}")
+
+  if [[ "$INTERACTIVE" -eq 1 ]]; then
+    run_interactive_wizard "$ssh_detected" "$nginx_detected" "$apache_detected" "$wordpress_detected" "$nextcloud_detected"
+  fi
+
+  install_fail2ban
 
   nginx_access_logpath="$(format_logpath_value "${nginx_access_logs[@]}")"
   nginx_error_logpath="$(format_logpath_value "${nginx_error_logs[@]}")"
