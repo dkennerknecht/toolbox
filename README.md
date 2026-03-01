@@ -33,6 +33,12 @@ A collection of setup, bootstrap, and hardening scripts for provisioning and mai
 sudo bash setup-zsh.sh [options]
 ```
 
+### One-liner download + install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<GITHUB_USER>/<REPO>/main/setup-zsh.sh | sudo bash
+```
+
 ### Options
 
 | Option | Description |
@@ -99,6 +105,12 @@ sudo bash setup-zsh.sh --all-users --dry-run
 
 ```bash
 sudo bash setup-fail2ban.sh [options]
+```
+
+### One-liner download + install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<GITHUB_USER>/<REPO>/main/setup-fail2ban.sh | sudo bash
 ```
 
 ### Interactive behavior
