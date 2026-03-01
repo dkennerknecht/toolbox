@@ -36,7 +36,7 @@ sudo bash setup-zsh.sh [options]
 ### One-liner download + install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<GITHUB_USER>/<REPO>/main/setup-zsh.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-zsh.sh | sudo bash
 ```
 
 ### Options
@@ -110,7 +110,7 @@ sudo bash setup-fail2ban.sh [options]
 ### One-liner download + install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<GITHUB_USER>/<REPO>/main/setup-fail2ban.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-fail2ban.sh | sudo bash
 ```
 
 ### Interactive behavior
