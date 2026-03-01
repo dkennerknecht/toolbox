@@ -26,8 +26,7 @@ INSTALL_DIR="/opt/ohmyzsh"
 CUSTOM_DIR="${INSTALL_DIR}/custom"
 PLUGINS_DIR="${CUSTOM_DIR}/plugins"
 
-LOCK_FILE="/var/lock/omz-shared-install.lock"
-LOCK_FD=9
+LOCK_DIR="/run/lock/omz-shared-install.lock.d"
 
 CRON_FILE="/etc/cron.daily/ohmyzsh-shared-update"
 CRON_STATE="/var/lib/ohmyzsh-shared-update.last"
@@ -37,10 +36,13 @@ warn() { echo "[$(date +'%F %T')] WARN: $*" >&2; }
 die()  { echo "[$(date +'%F %T')] ERROR: $*" >&2; exit 1; }
 
 run_or_echo() {
+  [[ $# -gt 0 ]] || return 0
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "DRY-RUN: $*"
+    printf 'DRY-RUN:'
+    printf ' %q' "$@"
+    printf '\n'
   else
-    eval "$@"
+    "$@"
   fi
 }
 
@@ -51,11 +53,20 @@ need_root() {
 have() { command -v "$1" >/dev/null 2>&1; }
 
 acquire_lock() {
-  exec {LOCK_FD}>"$LOCK_FILE" || die "Cannot open lock file: $LOCK_FILE"
-  if ! flock -n "$LOCK_FD"; then
-    die "Another install is running (lock: $LOCK_FILE)."
+  local lock_parent
+  lock_parent="$(dirname "$LOCK_DIR")"
+
+  [[ -L "$lock_parent" ]] && die "Refusing unsafe lock parent symlink: $lock_parent"
+  if [[ ! -d "$lock_parent" ]]; then
+    install -d -m 0755 -o root -g root "$lock_parent" || die "Cannot create lock parent: $lock_parent"
   fi
-  log "Lock acquired: $LOCK_FILE"
+
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+  else
+    die "Another install is running (lock dir: $LOCK_DIR)."
+  fi
+  log "Lock acquired: $LOCK_DIR"
 }
 
 detect_pkg_mgr() {
@@ -79,23 +90,23 @@ install_packages() {
   case "$mgr" in
     apt)
       export DEBIAN_FRONTEND=noninteractive
-      run_or_echo "apt-get update -y"
-      run_or_echo "apt-get install -y zsh vim git curl ca-certificates fzf"
+      run_or_echo apt-get update -y
+      run_or_echo apt-get install -y zsh vim git curl ca-certificates fzf
       ;;
     dnf)
-      run_or_echo "dnf install -y zsh vim git curl ca-certificates fzf"
+      run_or_echo dnf install -y zsh vim git curl ca-certificates fzf
       ;;
     yum)
-      run_or_echo "yum install -y zsh vim git curl ca-certificates fzf"
+      run_or_echo yum install -y zsh vim git curl ca-certificates fzf
       ;;
     pacman)
-      run_or_echo "pacman -Sy --noconfirm zsh vim git curl ca-certificates fzf"
+      run_or_echo pacman -Sy --noconfirm zsh vim git curl ca-certificates fzf
       ;;
     apk)
-      run_or_echo "apk add --no-cache zsh vim git curl ca-certificates fzf"
+      run_or_echo apk add --no-cache zsh vim git curl ca-certificates fzf
       ;;
     zypper)
-      run_or_echo "zypper --non-interactive install zsh vim git curl ca-certificates fzf"
+      run_or_echo zypper --non-interactive install zsh vim git curl ca-certificates fzf
       ;;
   esac
 }
@@ -209,7 +220,7 @@ clone_or_repair_root() {
     local bak
     bak="$(backup_path "$dest")"
     warn "Path exists but is not a git repo: $dest -> moving to $bak"
-    run_or_echo "mv '$dest' '$bak'"
+    run_or_echo mv -- "$dest" "$bak"
   fi
 
   if [[ -d "$dest/.git" ]]; then
@@ -234,13 +245,13 @@ clone_or_repair_root() {
       fi
     fi
   else
-    run_or_echo "git clone --depth=1 '$repo' '$dest' >/dev/null"
+    run_or_echo git clone --depth=1 --quiet "$repo" "$dest"
   fi
 }
 
 ensure_shared_omz() {
   log "Ensuring shared Oh-My-Zsh in: $INSTALL_DIR"
-  run_or_echo "mkdir -p '$INSTALL_DIR'"
+  run_or_echo mkdir -p "$INSTALL_DIR"
 
   # if exists and not a git repo but not empty -> move aside
   if [[ -d "$INSTALL_DIR" && ! -d "$INSTALL_DIR/.git" ]]; then
@@ -248,8 +259,8 @@ ensure_shared_omz() {
       local bak
       bak="$(backup_path "$INSTALL_DIR")"
       warn "Shared install dir is not a git repo: $INSTALL_DIR -> moving to $bak"
-      run_or_echo "mv '$INSTALL_DIR' '$bak'"
-      run_or_echo "mkdir -p '$INSTALL_DIR'"
+      run_or_echo mv -- "$INSTALL_DIR" "$bak"
+      run_or_echo mkdir -p "$INSTALL_DIR"
     fi
   fi
 
@@ -260,7 +271,7 @@ ensure_shared_omz() {
     chmod -R a+rX "$INSTALL_DIR"
   }
 
-  run_or_echo "mkdir -p '$PLUGINS_DIR'"
+  run_or_echo mkdir -p "$PLUGINS_DIR"
   [[ "$DRY_RUN" -eq 1 ]] || {
     chown -R root:root "$CUSTOM_DIR"
     chmod -R a+rX "$CUSTOM_DIR"
@@ -309,19 +320,31 @@ ensure_shared_plugins() {
 write_user_zshrc() {
   local user="$1" home="$2"
   local zshrc="$home/.zshrc"
+  local backup group tmp
 
   [[ -n "$home" && -d "$home" ]] || { warn "Skip $user: no home directory"; return 0; }
+  if [[ -L "$zshrc" ]]; then
+    warn "Skip $user: refusing to overwrite symlink $zshrc"
+    return 0
+  fi
 
   if [[ -f "$zshrc" ]]; then
-    local backup="$home/.zshrc.bak.$(date +%s)"
+    backup="$home/.zshrc.bak.$(date +%s)"
     log "Patching existing $zshrc for $user (backup: $backup)"
-    run_or_echo "cp -a '$zshrc' '$backup'"
+    run_or_echo cp -a -- "$zshrc" "$backup"
   else
     log "Creating $zshrc for $user"
   fi
 
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY-RUN: write managed zshrc to '$zshrc' (atomic replace)"
+    return 0
+  fi
+
+  tmp="$(mktemp "$home/.zshrc.tmp.XXXXXX")" || die "Cannot create temp file in $home"
+
   if [[ "$user" == "root" ]]; then
-    run_or_echo "cat > '$zshrc' <<'EOF'
+    cat >"$tmp" <<'EOF'
 # ~/.zshrc managed by shared-ohmyzsh install.sh
 export ZSH=\"/opt/ohmyzsh\"
 export ZSH_CUSTOM=\"/opt/ohmyzsh/custom\"
@@ -348,9 +371,9 @@ plugins=(
 source \"\$ZSH/oh-my-zsh.sh\"
 
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
-EOF"
+EOF
   else
-    run_or_echo "cat > '$zshrc' <<'EOF'
+    cat >"$tmp" <<'EOF'
 # ~/.zshrc managed by shared-ohmyzsh install.sh
 export ZSH=\"/opt/ohmyzsh\"
 export ZSH_CUSTOM=\"/opt/ohmyzsh/custom\"
@@ -373,14 +396,13 @@ plugins=(
 source \"\$ZSH/oh-my-zsh.sh\"
 
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
-EOF"
+EOF
   fi
 
-  if [[ "$DRY_RUN" -eq 0 ]]; then
-    local group
-    group="$(id -gn "$user" 2>/dev/null || echo "$user")"
-    chown "$user:$group" "$zshrc" || true
-  fi
+  group="$(id -gn "$user" 2>/dev/null || echo "$user")"
+  chown "$user:$group" "$tmp" || true
+  chmod 0644 "$tmp"
+  mv -f -- "$tmp" "$zshrc"
 }
 
 set_default_shell() {
@@ -390,7 +412,11 @@ set_default_shell() {
   [[ -n "$zsh_path" ]] || die "zsh not found after install."
 
   if ! grep -Fxq "$zsh_path" /etc/shells; then
-    run_or_echo "printf '%s\n' '$zsh_path' >> /etc/shells"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      echo "DRY-RUN: append '$zsh_path' to /etc/shells"
+    else
+      printf '%s\n' "$zsh_path" >> /etc/shells
+    fi
   fi
 
   local current_shell
