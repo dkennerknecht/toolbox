@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" role="img" aria-labelledby="title desc">
+  <title id="title">toolbox</title>
+  <desc id="desc">Logo for the toolbox repository: Linux setup, bootstrap, and hardening scripts.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1324"/>
+      <stop offset="100%" stop-color="#16213d"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="toolFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2a44"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#020617" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <rect x="20" y="20" width="920" height="280" rx="34" fill="url(#bg)"/>
+  <rect x="20" y="20" width="920" height="280" rx="34" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <g opacity="0.14">
+    <circle cx="820" cy="56" r="120" fill="#38bdf8"/>
+    <circle cx="120" cy="286" r="160" fill="#34d399"/>
+  </g>
+
+  <g transform="translate(72 70)" filter="url(#shadow)">
+    <rect x="0" y="44" width="220" height="138" rx="20" fill="url(#toolFill)" stroke="#67e8f9" stroke-width="2"/>
+    <rect x="44" y="16" width="132" height="42" rx="14" fill="url(#toolFill)" stroke="#67e8f9" stroke-width="2"/>
+    <rect x="52" y="0" width="116" height="18" rx="9" fill="#0b1220" stroke="#67e8f9" stroke-width="2"/>
+
+    <rect x="22" y="78" width="176" height="82" rx="12" fill="#0b1220" stroke="#334155" stroke-width="1.5"/>
+    <text x="38" y="112" fill="#67e8f9" font-family="SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace" font-size="18">&gt;_</text>
+    <text x="78" y="112" fill="#d1fae5" font-family="SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace" font-size="16">setup.sh</text>
+    <text x="38" y="138" fill="#d1fae5" font-family="SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace" font-size="16">hardening</text>
+
+    <path d="M168 122 L196 136 L196 164 L168 180 L140 164 L140 136 Z" fill="url(#accent)" stroke="#93c5fd" stroke-width="1.2"/>
+    <path d="M168 134 L184 142 L184 158 L168 166 L152 158 L152 142 Z" fill="#0b1220" opacity="0.8"/>
+  </g>
+
+  <g transform="translate(338 108)">
+    <text x="0" y="32" fill="#f8fafc" font-family="'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif" font-size="74" font-weight="700" letter-spacing="1.2">toolbox</text>
+    <rect x="2" y="52" width="270" height="6" rx="3" fill="url(#accent)"/>
+    <text x="0" y="96" fill="#cbd5e1" font-family="'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif" font-size="22">Setup • Bootstrap • Hardening</text>
+
+    <g transform="translate(0 122)">
+      <rect x="0" y="0" width="104" height="34" rx="17" fill="#0b1220" stroke="#38bdf8" stroke-width="1.2"/>
+      <text x="52" y="23" text-anchor="middle" fill="#bae6fd" font-family="'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif" font-size="16" font-weight="600">zsh</text>
+
+      <rect x="118" y="0" width="132" height="34" rx="17" fill="#0b1220" stroke="#34d399" stroke-width="1.2"/>
+      <text x="184" y="23" text-anchor="middle" fill="#bbf7d0" font-family="'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif" font-size="16" font-weight="600">fail2ban</text>
+    </g>
+  </g>
+</svg>

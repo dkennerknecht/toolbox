@@ -1,6 +1,21 @@
-# toolbox
-
-A collection of setup, bootstrap, and hardening scripts for provisioning and maintaining Linux systems.
+<div align="center">
+  <img src="assets/toolbox-logo.svg" alt="toolbox logo" width="700">
+  <p>Setup, bootstrap, and hardening scripts for provisioning and maintaining Linux systems.</p>
+  <p>
+    <a href="https://github.com/dkennerknecht/toolbox">
+      <img src="https://img.shields.io/github/stars/dkennerknecht/toolbox?style=for-the-badge" alt="GitHub stars">
+    </a>
+    <a href="https://github.com/dkennerknecht/toolbox/network/members">
+      <img src="https://img.shields.io/github/forks/dkennerknecht/toolbox?style=for-the-badge" alt="GitHub forks">
+    </a>
+    <a href="https://github.com/dkennerknecht/toolbox/commits/main">
+      <img src="https://img.shields.io/github/last-commit/dkennerknecht/toolbox?style=for-the-badge" alt="Last commit">
+    </a>
+    <a href="https://github.com/dkennerknecht/toolbox">
+      <img src="https://img.shields.io/github/languages/top/dkennerknecht/toolbox?style=for-the-badge" alt="Top language">
+    </a>
+  </p>
+</div>
 
 ## Available scripts
 
