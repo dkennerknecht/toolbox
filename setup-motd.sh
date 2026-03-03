@@ -12,6 +12,7 @@ MOTD_HOOK="/etc/update-motd.d/99-${SELF_NAME}"
 
 CACHE_DIR="/var/cache/${SELF_NAME}"
 CACHE_FILE="${CACHE_DIR}/updates.cache"
+NET_CACHE_FILE="${CACHE_DIR}/network.cache"
 
 SYSTEMD_SERVICE="/etc/systemd/system/${SELF_NAME}-updates.service"
 SYSTEMD_TIMER="/etc/systemd/system/${SELF_NAME}-updates.timer"
@@ -157,6 +158,17 @@ get_mem() {
     }' /proc/meminfo 2>/dev/null || echo "n/a"
 }
 
+get_mem_template() {
+  awk '
+    /^MemFree:/ {f=$2}
+    /^MemTotal:/ {t=$2}
+    END {
+      if (t>0) {
+        printf "%s kB (Free) / %s kB (Total)", f+0, t+0
+      } else print "n/a"
+    }' /proc/meminfo 2>/dev/null || echo "n/a"
+}
+
 get_disk_root() { df -h / 2>/dev/null | awk 'NR==2{printf "%s used of %s (%s)", $3,$2,$5}' || echo "n/a"; }
 
 get_ip_addrs() {
@@ -173,11 +185,117 @@ get_gw() {
   fi
 }
 
+get_lan_ip() {
+  local lan
+  lan=""
+  if have ip; then
+    lan="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}' || true)"
+  fi
+  if [[ -z "${lan}" ]]; then
+    lan="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+  fi
+  [[ -n "${lan}" ]] || lan="n/a"
+  printf "%s\n" "${lan}"
+}
+
+get_wan_ip_live() {
+  local wan
+  wan="n/a"
+
+  if have curl; then
+    wan="$(curl -4fsS --max-time 2 https://api.ipify.org 2>/dev/null || echo "n/a")"
+  elif have wget; then
+    wan="$(wget -4qO- --timeout=2 https://api.ipify.org 2>/dev/null || echo "n/a")"
+  fi
+
+  if [[ ! "${wan}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    wan="n/a"
+  fi
+  printf "%s\n" "${wan}"
+}
+
+get_uptime_template() {
+  local total d h m s
+  if [[ -r /proc/uptime ]]; then
+    total="$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo "")"
+    if [[ "${total}" =~ ^[0-9]+$ ]]; then
+      d=$(( total / 86400 ))
+      h=$(( (total % 86400) / 3600 ))
+      m=$(( (total % 3600) / 60 ))
+      s=$(( total % 60 ))
+      printf "%s days, %02dh%02dm%02ds\n" "${d}" "${h}" "${m}" "${s}"
+      return 0
+    fi
+  fi
+  get_uptime
+}
+
+get_load_template() {
+  awk '{printf "%s, %s, %s (1, 5, 15 min)", $1, $2, $3}' /proc/loadavg 2>/dev/null || echo "n/a"
+}
+
+get_process_count() {
+  local count
+  if ! have ps; then
+    echo "n/a"
+    return 0
+  fi
+
+  count="$(ps -e -o pid= 2>/dev/null | awk 'END{print NR+0}' 2>/dev/null || true)"
+  if [[ "${count}" =~ ^[0-9]+$ ]]; then
+    printf "%s\n" "${count}"
+  else
+    echo "n/a"
+  fi
+}
+
+dots_label() {
+  local label="$1"
+  local width=19
+  local dots
+  dots=$(( width - ${#label} ))
+  if (( dots < 2 )); then
+    dots=2
+  fi
+  printf "%s" "${label}"
+  printf "%*s" "${dots}" "" | tr ' ' '.'
+}
+
+template_row() {
+  local label="$1"
+  local value="$2"
+  printf "%s%s%s: %s%s%s\n" "${CYN}" "$(dots_label "${label}")" "${RST}" "${WHT}" "${value}" "${RST}"
+}
+
 read_updates_cache() {
   if [[ -r "${CACHE_FILE}" ]]; then
     awk 'NR==1{print $2" "$3}' "${CACHE_FILE}" 2>/dev/null
   else
     echo "n/a n/a"
+  fi
+}
+
+read_network_cache() {
+  if [[ -r "${NET_CACHE_FILE}" ]]; then
+    awk -F'|' 'NR==1{print $2" "$3}' "${NET_CACHE_FILE}" 2>/dev/null
+  else
+    echo "n/a n/a"
+  fi
+}
+
+write_network_cache() {
+  local now lan wan
+
+  now="$(date +%s)"
+  lan="$(get_lan_ip)"
+  wan="$(get_wan_ip_live)"
+
+  [[ -n "${lan}" ]] || lan="n/a"
+  [[ -n "${wan}" ]] || wan="n/a"
+
+  if mkdir -p "${CACHE_DIR}" 2>/dev/null; then
+    printf "%s|%s|%s\n" "${now}" "${lan}" "${wan}" >"${NET_CACHE_FILE}" 2>/dev/null || true
+    chmod 0644 "${NET_CACHE_FILE}" 2>/dev/null || true
   fi
 }
 
@@ -193,9 +311,11 @@ write_updates_cache() {
     sec="n/a"
   fi
 
-  mkdir -p "${CACHE_DIR}" 2>/dev/null || true
-  printf "%s %s %s\n" "${now}" "${total}" "${sec}" >"${CACHE_FILE}" 2>/dev/null || true
-  chmod 0644 "${CACHE_FILE}" 2>/dev/null || true
+  if mkdir -p "${CACHE_DIR}" 2>/dev/null; then
+    printf "%s %s %s\n" "${now}" "${total}" "${sec}" >"${CACHE_FILE}" 2>/dev/null || true
+    chmod 0644 "${CACHE_FILE}" 2>/dev/null || true
+  fi
+  write_network_cache
 }
 
 print_logo_ascii() {
@@ -239,115 +359,68 @@ LOGO
 LOGO
 }
 
-logo_color() {
-  local osid
-  osid="$(get_os_id)"
+build_right_panel() {
+  local os uptime mem load procs lan wan
+  local date_line kernel_line
 
-  if is_rpi; then
-    printf "%s%s" "${BLD}" "${RED}"
-    return 0
-  fi
+  os="$(get_os)"
+  uptime="$(get_uptime_template)"
+  mem="$(get_mem_template)"
+  load="$(get_load_template)"
+  procs="$(get_process_count)"
+  read -r lan wan < <(read_network_cache)
 
-  if [[ "${osid}" == "debian" ]] && is_intel; then
-    printf "%s%s" "${BLD}" "${RED}"
-    return 0
-  fi
+  date_line="$(LC_TIME=C date '+%A, %d %B %Y, %I:%M:%S %p' 2>/dev/null || date)"
+  kernel_line="Linux $(uname -r 2>/dev/null || echo "n/a") $(uname -m 2>/dev/null || echo "n/a")"
 
-  printf "%s%s" "${BLD}" "${BLU}"
-}
-
-print_header() {
-  local host logo_tmp host_tmp logo_w logo_col host_col
-
-  host="$(get_hostname)"
-  logo_tmp="$(mktemp)"
-  host_tmp="$(mktemp)"
-
-  print_logo_ascii >"${logo_tmp}"
-  if have figlet; then
-    figlet -f slant "${host}" 2>/dev/null || figlet "${host}" 2>/dev/null || printf "%s\n" "${host}"
-  else
-    printf "+-%s-+\n" "$(printf '%*s' "${#host}" | tr ' ' '-')"
-    printf "| %s |\n" "${host}"
-    printf "+-%s-+\n" "$(printf '%*s' "${#host}" | tr ' ' '-')"
-  fi >"${host_tmp}"
-
-  logo_w="$(awk '{ if (length > w) w=length } END { print w+0 }' "${logo_tmp}")"
-  logo_col="$(logo_color)"
-  host_col="${BLD}${MAG}"
-
-  paste -d $'\t' \
-    <(awk -v w="${logo_w}" -v c="${logo_col}" -v r="${RST}" '{ printf "%s%-*s%s\n", c, w, $0, r }' "${logo_tmp}") \
-    <(awk -v c="${host_col}" -v r="${RST}" '{ print c $0 r }' "${host_tmp}") \
-    | sed $'s/\t/    /'
-
-  rm -f "${logo_tmp}" "${host_tmp}"
+  printf "%s%s%s\n" "${BLU}${BLD}" "${date_line}" "${RST}"
+  printf "%s%s%s\n" "${BLU}" "${kernel_line}" "${RST}"
+  printf "\n"
+  template_row "OS" "${os}"
+  template_row "Uptime" "${uptime}"
+  template_row "Memory" "${mem}"
+  template_row "Load Averages" "${load}"
+  template_row "Running Processes" "${procs}"
+  template_row "LAN IP Address" "${lan}"
+  template_row "WAN IP Address" "${wan}"
 }
 
 render_motd() {
-  local os kernel cpu temp uptime load mem disk ips gw lastboot
-  local up_total up_sec
+  local logo_tmp right_tmp logo_w logo_mode
 
-  os="$(get_os)"
-  kernel="$(get_kernel)"
-  cpu="$(get_cpu_model)"
-  temp="$(get_cpu_temp)"
-  uptime="$(get_uptime)"
-  lastboot="$(get_last_boot)"
-  load="$(get_load)"
-  mem="$(get_mem)"
-  disk="$(get_disk_root)"
-  ips="$(get_ip_addrs)"
-  gw="$(get_gw || true)"
+  logo_tmp="$(mktemp)"
+  right_tmp="$(mktemp)"
 
-  read -r up_total up_sec < <(read_updates_cache)
+  print_logo_ascii >"${logo_tmp}"
+  build_right_panel >"${right_tmp}"
 
-  print_header
-
-  hr
-  kv "OS" "${WHT}${os}${RST}" "${BLU}"
-  kv "Kernel" "${WHT}${kernel}${RST}" "${BLU}"
-  kv "CPU" "${WHT}${cpu}${RST}" "${BLU}"
-
-  local temp_col temp_int
-  temp_col="${GRN}"
-  if [[ "${temp}" =~ ^([0-9]+) ]]; then
-    temp_int="${BASH_REMATCH[1]}"
-    if (( temp_int >= 70 )); then
-      temp_col="${RED}"
-    elif (( temp_int >= 55 )); then
-      temp_col="${YEL}"
-    fi
-  else
-    temp_col="${DIM}"
-  fi
-  kv "CPU Temp" "${BLD}${temp_col}${temp}${RST}" "${BLU}"
-
-  kv "Uptime" "${WHT}${uptime}${RST} ${DIM}(boot: ${lastboot})${RST}" "${BLU}"
-  kv "Load" "${WHT}${load}${RST}" "${BLU}"
-  kv "Memory" "${WHT}${mem}${RST}" "${BLU}"
-  kv "Disk /" "${WHT}${disk}${RST}" "${BLU}"
-  kv "IP" "${WHT}${ips}${RST}" "${BLU}"
-  [[ -n "${gw:-}" ]] && kv "Gateway" "${WHT}${gw}${RST}" "${BLU}"
-
-  hr
-
-  if [[ "${up_total}" == "n/a" ]]; then
-    kv "Updates" "${DIM}n/a (cache fehlt - install ausfuehren)${RST}" "${MAG}"
-  elif [[ "${up_total}" =~ ^[0-9]+$ ]] && (( up_total == 0 )); then
-    kv "Updates" "$(pill "0" "${GRN}") ${GRN}${BLD}System aktuell${RST}" "${MAG}"
-  else
-    local sec_txt
-    sec_txt=""
-    if [[ "${up_sec}" =~ ^[0-9]+$ ]] && (( up_sec > 0 )); then
-      sec_txt=" $(pill "${up_sec} security" "${RED}")"
-    fi
-    kv "Updates" "$(pill "${up_total}" "${YEL}")${sec_txt} ${DIM}(aus Cache)${RST}" "${MAG}"
-    printf "  %sRun:%s %ssudo apt update && sudo apt upgrade%s\n" "${DIM}" "${RST}" "${BLD}" "${RST}"
+  logo_w="$(awk '{ if (length > w) w=length } END { print w+0 }' "${logo_tmp}")"
+  logo_mode="other"
+  if is_rpi; then
+    logo_mode="rpi"
+  elif [[ "$(get_os_id)" == "debian" ]] && is_intel; then
+    logo_mode="debian"
   fi
 
-  hr
-  printf "  %sCache refresh:%s systemctl start %s-updates.service\n\n" "${DIM}" "${RST}" "${SELF_NAME}"
+  paste -d $'\t' \
+    <(awk -v w="${logo_w}" -v mode="${logo_mode}" -v bld="${BLD}" -v grn="${GRN}" -v yel="${YEL}" -v red="${RED}" -v blu="${BLU}" -v rst="${RST}" '
+      {
+        if (mode == "rpi") {
+          if (NR <= 4) c = bld grn
+          else if (NR <= 6) c = bld yel
+          else c = bld red
+        } else if (mode == "debian") {
+          c = bld red
+        } else {
+          c = bld blu
+        }
+        printf "%s%-*s%s\n", c, w, $0, rst
+      }' "${logo_tmp}") \
+    "${right_tmp}" \
+    | sed $'s/\t/    /'
+
+  printf "\n"
+  rm -f "${logo_tmp}" "${right_tmp}"
 }
 
 install_motd() {
