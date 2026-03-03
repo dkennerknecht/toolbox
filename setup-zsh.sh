@@ -296,6 +296,14 @@ ensure_shared_plugins() {
   clone_or_repair_root "https://github.com/mrjohannchang/fz.sh" \
     "$PLUGINS_DIR/fz.sh"
 
+  # OMZ plugin id must be "fz" (expects fz/fz.plugin.zsh). Keep repo dir as fz.sh and add shim.
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY-RUN: ln -sfn '$PLUGINS_DIR/fz.sh' '$PLUGINS_DIR/fz'"
+  else
+    ln -sfn "$PLUGINS_DIR/fz.sh" "$PLUGINS_DIR/fz"
+    chown -h root:root "$PLUGINS_DIR/fz"
+  fi
+
   clone_or_repair_root "https://github.com/z-shell/F-Sy-H" \
     "$PLUGINS_DIR/F-Sy-H"
 
@@ -361,12 +369,21 @@ fpath+=("$ZSH_CUSTOM/plugins/zsh-completions/src")
 plugins=(
   git
   zsh-completions
-  zsh-autocomplete
   zsh-autosuggestions
   zsh-z
-  fz.sh
-  F-Sy-H
+  fz
 )
+
+# Some distros preload zsh-syntax-highlighting in /etc/zshrc.
+# It conflicts with zsh-autocomplete widgets (menu-search/recent-paths warnings).
+if (( ${+functions[_zsh_highlight]} || ${+functions[_zsh_highlight_bind_widgets]} )); then
+  :
+else
+  plugins+=(
+    zsh-autocomplete
+    F-Sy-H
+  )
+fi
 
 source "$ZSH/oh-my-zsh.sh"
 
@@ -386,12 +403,21 @@ fpath+=("$ZSH_CUSTOM/plugins/zsh-completions/src")
 plugins=(
   git
   zsh-completions
-  zsh-autocomplete
   zsh-autosuggestions
   zsh-z
-  fz.sh
-  F-Sy-H
+  fz
 )
+
+# Some distros preload zsh-syntax-highlighting in /etc/zshrc.
+# It conflicts with zsh-autocomplete widgets (menu-search/recent-paths warnings).
+if (( ${+functions[_zsh_highlight]} || ${+functions[_zsh_highlight_bind_widgets]} )); then
+  :
+else
+  plugins+=(
+    zsh-autocomplete
+    F-Sy-H
+  )
+fi
 
 source "$ZSH/oh-my-zsh.sh"
 
