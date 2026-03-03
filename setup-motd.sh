@@ -753,23 +753,5 @@ case "${1:-}" in
   --refresh-cache) write_updates_cache ;;
   *) render_motd ;;
 esac
-Was sich damit konkret ändert
-Login ist schnell: beim Anzeigen der MOTD werden keine apt-Simulationen mehr ausgeführt, sondern nur ein Cache gelesen.
-
-Updates zählen läuft im Hintergrund: via systemd timer stündlich (motd-pi-updates.timer).
-
-Mehr Farbe / bessere Erkennbarkeit: farbige Keys, “Pills” für Update-Zahlen, Warnfarben für CPU-Temp.
-
-Logo-Regel:
-
-Raspberry Pi erkannt ⇒ Beere
-
-Debian auf Intel ⇒ Debian ASCII
-
-Der lange Debian-Text kommt aus /etc/motd → wird beim Install geleert (Backup wird erstellt).
-
-Wenn du zusätzlich willst: farbige Status-Pills für Services (docker/nginx/ssh/influx/…): sag mir kurz welche Services.
-
-
 
 
