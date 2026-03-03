@@ -346,17 +346,17 @@ write_user_zshrc() {
   if [[ "$user" == "root" ]]; then
     cat >"$tmp" <<'EOF'
 # ~/.zshrc managed by shared-ohmyzsh install.sh
-export ZSH=\"/opt/ohmyzsh\"
-export ZSH_CUSTOM=\"/opt/ohmyzsh/custom\"
+export ZSH="/opt/ohmyzsh"
+export ZSH_CUSTOM="/opt/ohmyzsh/custom"
 
-ZSH_THEME=\"gnzh\"
+ZSH_THEME="gnzh"
 
 # autoupdate-oh-my-zsh-plugins (root only)
 export UPDATE_ZSH_DAYS=30
 ZSH_CUSTOM_AUTOUPDATE_QUIET=true
 
 # zsh-completions: must be in fpath before compinit (OMZ runs compinit)
-fpath+=(\"\$ZSH_CUSTOM/plugins/zsh-completions/src\")
+fpath+=("$ZSH_CUSTOM/plugins/zsh-completions/src")
 
 plugins=(
   git
@@ -368,20 +368,20 @@ plugins=(
   F-Sy-H
 )
 
-source \"\$ZSH/oh-my-zsh.sh\"
+source "$ZSH/oh-my-zsh.sh"
 
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
 EOF
   else
     cat >"$tmp" <<'EOF'
 # ~/.zshrc managed by shared-ohmyzsh install.sh
-export ZSH=\"/opt/ohmyzsh\"
-export ZSH_CUSTOM=\"/opt/ohmyzsh/custom\"
+export ZSH="/opt/ohmyzsh"
+export ZSH_CUSTOM="/opt/ohmyzsh/custom"
 
-ZSH_THEME=\"gnzh\"
+ZSH_THEME="gnzh"
 
 # zsh-completions: must be in fpath before compinit (OMZ runs compinit)
-fpath+=(\"\$ZSH_CUSTOM/plugins/zsh-completions/src\")
+fpath+=("$ZSH_CUSTOM/plugins/zsh-completions/src")
 
 plugins=(
   git
@@ -393,7 +393,7 @@ plugins=(
   F-Sy-H
 )
 
-source \"\$ZSH/oh-my-zsh.sh\"
+source "$ZSH/oh-my-zsh.sh"
 
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
 EOF
