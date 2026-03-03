@@ -374,16 +374,10 @@ plugins=(
   fz
 )
 
-# Some distros preload zsh-syntax-highlighting in /etc/zshrc.
-# It conflicts with zsh-autocomplete widgets (menu-search/recent-paths warnings).
-if (( ${+functions[_zsh_highlight]} || ${+functions[_zsh_highlight_bind_widgets]} )); then
-  :
-else
-  plugins+=(
-    zsh-autocomplete
-    F-Sy-H
-  )
-fi
+# Keep startup warning-free on systems that preload zsh-syntax-highlighting.
+plugins+=(
+  F-Sy-H
+)
 
 source "$ZSH/oh-my-zsh.sh"
 
@@ -408,16 +402,10 @@ plugins=(
   fz
 )
 
-# Some distros preload zsh-syntax-highlighting in /etc/zshrc.
-# It conflicts with zsh-autocomplete widgets (menu-search/recent-paths warnings).
-if (( ${+functions[_zsh_highlight]} || ${+functions[_zsh_highlight_bind_widgets]} )); then
-  :
-else
-  plugins+=(
-    zsh-autocomplete
-    F-Sy-H
-  )
-fi
+# Keep startup warning-free on systems that preload zsh-syntax-highlighting.
+plugins+=(
+  F-Sy-H
+)
 
 source "$ZSH/oh-my-zsh.sh"
 
