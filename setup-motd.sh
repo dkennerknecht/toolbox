@@ -24,7 +24,7 @@ CACHE_FILE="${CACHE_DIR}/updates.cache"
 CACHE_TTL_SECONDS=3600
 
 # ---------- colors ----------
-if command -v tput >/dev/null 2>&1 && [[ -t 1 ]]; then
+if command -v tput >/dev/null 2>&1 && [[ -z "${NO_COLOR:-}" ]] && [[ "${TERM:-}" != "dumb" ]]; then
   C_RESET="$(tput sgr0)"
   C_BOLD="$(tput bold)"
   C_DIM="$(tput dim)"
@@ -46,6 +46,10 @@ kv() { # key value
 }
 
 have() { command -v "$1" >/dev/null 2>&1; }
+msg_info() { printf "%s[INFO]%s %s\n" "${C_BLU}${C_BOLD}" "${C_RESET}" "$*"; }
+msg_ok() { printf "%s[ OK ]%s %s\n" "${C_GRN}${C_BOLD}" "${C_RESET}" "$*"; }
+msg_warn() { printf "%s[WARN]%s %s\n" "${C_YEL}${C_BOLD}" "${C_RESET}" "$*"; }
+msg_err() { printf "%s[ERR ]%s %s\n" "${C_RED}${C_BOLD}" "${C_RESET}" "$*" >&2; }
 
 # ---------- system helpers ----------
 get_hostname() { hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || echo "raspberrypi"; }
@@ -311,7 +315,7 @@ render_motd() {
 # ---------- install ----------
 install_motd() {
   if [[ $EUID -ne 0 ]]; then
-    echo "Run as root: sudo $0 --install" >&2
+    msg_err "Run as root: sudo $0 --install"
     exit 1
   fi
 
@@ -342,10 +346,10 @@ EOF
   mkdir -p "${CACHE_DIR}" || true
   chmod 0755 "${CACHE_DIR}" || true
 
-  echo "OK: Installed."
-  echo "  Hook: ${MOTD_HOOK}"
-  echo "  Bin : ${MOTD_BIN}"
-  echo "Test: ssh localhost  (oder neue Shell öffnen)"
+  msg_ok "Installed."
+  msg_info "Hook: ${MOTD_HOOK}"
+  msg_info "Bin : ${MOTD_BIN}"
+  msg_warn "Test: ssh localhost (oder neue Shell öffnen)"
 }
 
 # ---------- main ----------
@@ -430,7 +434,7 @@ SYSTEMD_SERVICE="/etc/systemd/system/${SELF_NAME}-updates.service"
 SYSTEMD_TIMER="/etc/systemd/system/${SELF_NAME}-updates.timer"
 
 # ---- colors ----
-if command -v tput >/dev/null 2>&1 && [[ -t 1 ]]; then
+if command -v tput >/dev/null 2>&1 && [[ -z "${NO_COLOR:-}" ]] && [[ "${TERM:-}" != "dumb" ]]; then
   RST="$(tput sgr0)"
   BLD="$(tput bold)"
   DIM="$(tput dim)"
@@ -446,6 +450,10 @@ else
 fi
 
 have(){ command -v "$1" >/dev/null 2>&1; }
+msg_info(){ printf "%s[INFO]%s %s\n" "${BLD}${BLU}" "${RST}" "$*"; }
+msg_ok(){ printf "%s[ OK ]%s %s\n" "${BLD}${GRN}" "${RST}" "$*"; }
+msg_warn(){ printf "%s[WARN]%s %s\n" "${BLD}${YEL}" "${RST}" "$*"; }
+msg_err(){ printf "%s[ERR ]%s %s\n" "${BLD}${RED}" "${RST}" "$*" >&2; }
 
 # ---- helpers ----
 hr(){ printf "%s\n" "${DIM}────────────────────────────────────────────────────────────────────────────${RST}"; }
@@ -679,7 +687,7 @@ render_motd(){
 # ---- install ----
 install_motd(){
   if [[ $EUID -ne 0 ]]; then
-    echo "Run as root: sudo $0 --install" >&2
+    msg_err "Run as root: sudo $0 --install"
     exit 1
   fi
 
@@ -740,11 +748,11 @@ EOF
     [[ -e "$f" ]] && chmod -x "$f" || true
   done
 
-  echo "OK installed:"
-  echo "  Hook : ${MOTD_HOOK}"
-  echo "  Bin  : ${MOTD_BIN}"
-  echo "  Timer: ${SELF_NAME}-updates.timer (hourly)"
-  echo "  Note : /etc/motd was emptied (backup: /etc/motd.${SELF_NAME}.bak)"
+  msg_ok "Installed."
+  msg_info "Hook : ${MOTD_HOOK}"
+  msg_info "Bin  : ${MOTD_BIN}"
+  msg_info "Timer: ${SELF_NAME}-updates.timer (hourly)"
+  msg_warn "Note : /etc/motd was emptied (backup: /etc/motd.${SELF_NAME}.bak)"
 }
 
 # ---- main ----
@@ -753,5 +761,4 @@ case "${1:-}" in
   --refresh-cache) write_updates_cache ;;
   *) render_motd ;;
 esac
-
 
