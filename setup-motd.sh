@@ -198,25 +198,11 @@ write_updates_cache() {
   chmod 0644 "${CACHE_FILE}" 2>/dev/null || true
 }
 
-print_hostname_ascii() {
-  local host
-  host="$(get_hostname)"
-
-  if have figlet; then
-    printf "%s" "${BLD}${MAG}"
-    figlet -f slant "${host}" 2>/dev/null || figlet "${host}" 2>/dev/null || printf "%s\n" "${host}"
-    printf "%s" "${RST}"
-  else
-    printf "%s%s%s\n" "${BLD}${MAG}" "${host}" "${RST}"
-  fi
-}
-
-print_logo() {
+print_logo_ascii() {
   local osid
   osid="$(get_os_id)"
 
   if is_rpi; then
-    printf "%s" "${BLD}${RED}"
     cat <<'LOGO'
         .~~.   .~~.
        '. \ ' ' / .'
@@ -229,12 +215,10 @@ print_logo() {
         '~ .~~~. ~'
             '~'
 LOGO
-    printf "%s" "${RST}"
     return 0
   fi
 
   if [[ "${osid}" == "debian" ]] && is_intel; then
-    printf "%s" "${BLD}${RED}"
     cat <<'LOGO'
        ____       _     _
       |  _ \  ___| |__ (_) __ _ _ __
@@ -242,11 +226,9 @@ LOGO
       | |_| |  __/ |_) | | (_| | | | |
       |____/ \___|_.__/|_|\__,_|_| |_|
 LOGO
-    printf "%s" "${RST}"
     return 0
   fi
 
-  printf "%s" "${BLD}${BLU}"
   cat <<'LOGO'
    _     _             _
   | |   (_)           | |
@@ -255,7 +237,51 @@ LOGO
   | |___| | | | | |_| | |_
   |_____|_|_| |_|\__,_|\__|
 LOGO
-  printf "%s" "${RST}"
+}
+
+logo_color() {
+  local osid
+  osid="$(get_os_id)"
+
+  if is_rpi; then
+    printf "%s%s" "${BLD}" "${RED}"
+    return 0
+  fi
+
+  if [[ "${osid}" == "debian" ]] && is_intel; then
+    printf "%s%s" "${BLD}" "${RED}"
+    return 0
+  fi
+
+  printf "%s%s" "${BLD}" "${BLU}"
+}
+
+print_header() {
+  local host logo_tmp host_tmp logo_w logo_col host_col
+
+  host="$(get_hostname)"
+  logo_tmp="$(mktemp)"
+  host_tmp="$(mktemp)"
+
+  print_logo_ascii >"${logo_tmp}"
+  if have figlet; then
+    figlet -f slant "${host}" 2>/dev/null || figlet "${host}" 2>/dev/null || printf "%s\n" "${host}"
+  else
+    printf "+-%s-+\n" "$(printf '%*s' "${#host}" | tr ' ' '-')"
+    printf "| %s |\n" "${host}"
+    printf "+-%s-+\n" "$(printf '%*s' "${#host}" | tr ' ' '-')"
+  fi >"${host_tmp}"
+
+  logo_w="$(awk '{ if (length > w) w=length } END { print w+0 }' "${logo_tmp}")"
+  logo_col="$(logo_color)"
+  host_col="${BLD}${MAG}"
+
+  paste -d $'\t' \
+    <(awk -v w="${logo_w}" -v c="${logo_col}" -v r="${RST}" '{ printf "%s%-*s%s\n", c, w, $0, r }' "${logo_tmp}") \
+    <(awk -v c="${host_col}" -v r="${RST}" '{ print c $0 r }' "${host_tmp}") \
+    | sed $'s/\t/    /'
+
+  rm -f "${logo_tmp}" "${host_tmp}"
 }
 
 render_motd() {
@@ -276,8 +302,7 @@ render_motd() {
 
   read -r up_total up_sec < <(read_updates_cache)
 
-  print_hostname_ascii
-  print_logo
+  print_header
 
   hr
   kv "OS" "${WHT}${os}${RST}" "${BLU}"
