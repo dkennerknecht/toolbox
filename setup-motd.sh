@@ -383,28 +383,38 @@ fit_cell() {
 
 box_top_2col() {
   local w1="$1" w2="$2"
-  printf "┏%s┯%s┓\n" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")"
+  printf "%s┏%s┯%s┓%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
 }
 
 box_sep_2col() {
   local w1="$1" w2="$2"
-  printf "┣%s┿%s┫\n" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")"
+  printf "%s┣%s┿%s┫%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
 }
 
 box_bottom_2col() {
   local w1="$1" w2="$2"
-  printf "┗%s┷%s┛\n" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")"
+  printf "%s┗%s┷%s┛%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
 }
 
 box_row_2col() {
   local w1="$1" w2="$2" c1="$3" c2="$4"
-  printf "┃%s│%s┃\n" "$(fit_cell "${c1}" "${w1}")" "$(fit_cell "${c2}" "${w2}")"
+  local s1="${5:-${WHT}}" s2="${6:-${WHT}}"
+  local p1 p2 bc
+  p1="$(fit_cell "${c1}" "${w1}")"
+  p2="$(fit_cell "${c2}" "${w2}")"
+  bc="${DIM}${CYN}"
+  printf "%s┃%s%s%s%s│%s%s%s%s┃%s\n" "${bc}" "${s1}" "${p1}" "${RST}" "${bc}" "${s2}" "${p2}" "${RST}" "${bc}" "${RST}"
 }
 
-box_top_full() { local w="$1"; printf "┏%s┓\n" "$(repeat_char "━" "${w}")"; }
-box_sep_full() { local w="$1"; printf "┣%s┫\n" "$(repeat_char "━" "${w}")"; }
-box_bottom_full() { local w="$1"; printf "┗%s┛\n" "$(repeat_char "━" "${w}")"; }
-box_row_full() { local w="$1" c="$2"; printf "┃%s┃\n" "$(fit_cell "${c}" "${w}")"; }
+box_top_full() { local w="$1"; printf "%s┏%s┓%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w}")" "${RST}"; }
+box_sep_full() { local w="$1"; printf "%s┣%s┫%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w}")" "${RST}"; }
+box_bottom_full() { local w="$1"; printf "%s┗%s┛%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w}")" "${RST}"; }
+box_row_full() {
+  local w="$1" c="$2" s="${3:-${WHT}}" p bc
+  p="$(fit_cell "${c}" "${w}")"
+  bc="${DIM}${CYN}"
+  printf "%s┃%s%s%s%s┃%s\n" "${bc}" "${s}" "${p}" "${RST}" "${bc}" "${RST}"
+}
 
 bar_from_percent() {
   local pct="$1" width="$2" full_char="${3:-|}" empty_char="${4:--}"
@@ -626,16 +636,16 @@ build_general_panel() {
   proc="$(get_process_split)"
 
   box_top_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " General:" "${now}"
+  box_row_2col "${c1}" "${c2}" " General:" "${now}" "${BLD}${YEL}" "${BLD}${BLU}"
   box_sep_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " Device" "${device}"
-  box_row_2col "${c1}" "${c2}" " Distro" "${distro}"
-  box_row_2col "${c1}" "${c2}" " Kernel" "${kernel}"
-  box_row_2col "${c1}" "${c2}" " Uptime" "${uptime}"
+  box_row_2col "${c1}" "${c2}" " Device" "${device}" "${BLD}${CYN}" "${WHT}"
+  box_row_2col "${c1}" "${c2}" " Distro" "${distro}" "${BLD}${CYN}" "${WHT}"
+  box_row_2col "${c1}" "${c2}" " Kernel" "${kernel}" "${BLD}${CYN}" "${WHT}"
+  box_row_2col "${c1}" "${c2}" " Uptime" "${uptime}" "${BLD}${CYN}" "${WHT}"
   box_row_2col "${c1}" "${c2}" "" ""
-  box_row_2col "${c1}" "${c2}" " Load" "${load}"
-  box_row_2col "${c1}" "${c2}" " Memory" "${mem}"
-  box_row_2col "${c1}" "${c2}" " Processes" "${proc}"
+  box_row_2col "${c1}" "${c2}" " Load" "${load}" "${BLD}${CYN}" "${WHT}"
+  box_row_2col "${c1}" "${c2}" " Memory" "${mem}" "${BLD}${CYN}" "${WHT}"
+  box_row_2col "${c1}" "${c2}" " Processes" "${proc}" "${BLD}${CYN}" "${WHT}"
   box_bottom_2col "${c1}" "${c2}"
 }
 
@@ -651,28 +661,28 @@ build_cpu_panel() {
   get_cpu_usage_samples >"${usage_tmp}"
 
   box_top_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " CPU:" "${model}"
-  box_row_2col "${c1}" "${c2}" "" "${model_line2}"
+  box_row_2col "${c1}" "${c2}" " CPU:" "${model}" "${BLD}${YEL}" "${WHT}"
+  box_row_2col "${c1}" "${c2}" "" "${model_line2}" "${WHT}" "${WHT}"
   box_sep_full "${fw}"
-  box_row_full "${fw}" " Load ${load}"
+  box_row_full "${fw}" " Load ${load}" "${BLD}${CYN}"
   box_sep_full "${fw}"
 
   local idx pct bar
   while read -r idx pct; do
     [[ -n "${idx:-}" ]] || continue
     bar="$(bar_from_percent "${pct}" 30 "|" "-")"
-    box_row_full "${fw}" " CPU ${idx} [${bar}] $(printf '%5.1f' "${pct}")%"
+    box_row_full "${fw}" " CPU ${idx} [${bar}] $(printf '%5.1f' "${pct}")%" "${GRN}"
   done < "${usage_tmp}"
 
   # keep panel height stable
   local lines
   lines="$(wc -l < "${usage_tmp}" | awk '{print $1}')"
   while (( lines < 4 )); do
-    box_row_full "${fw}" ""
+    box_row_full "${fw}" "" "${WHT}"
     lines=$(( lines + 1 ))
   done
 
-  box_row_full "${fw}" ""
+  box_row_full "${fw}" "" "${WHT}"
   box_bottom_full "${fw}"
   rm -f "${usage_tmp}"
 }
@@ -682,20 +692,20 @@ build_disk_panel() {
   local count=0 body_rows=0 mount pct size bar
 
   box_top_full "${fw}"
-  box_row_full "${fw}" " Disk usage:"
+  box_row_full "${fw}" " Disk usage:" "${BLD}${YEL}"
   box_sep_full "${fw}"
 
   while IFS='|' read -r mount pct size; do
     [[ -n "${mount:-}" ]] || continue
     bar="$(bar_from_percent "${pct}" 42 "=" "-")"
-    box_row_full "${fw}" " ${mount} ${pct}% used out of ${size}"
-    box_row_full "${fw}" " [${bar}]"
+    box_row_full "${fw}" " ${mount} ${pct}% used out of ${size}" "${WHT}"
+    box_row_full "${fw}" " [${bar}]" "${YEL}"
     count=$(( count + 1 ))
     body_rows=$(( body_rows + 2 ))
   done < <(get_disk_entries)
 
   while (( body_rows < 12 )); do
-    box_row_full "${fw}" ""
+    box_row_full "${fw}" "" "${WHT}"
     body_rows=$(( body_rows + 1 ))
   done
 
@@ -723,11 +733,11 @@ build_memory_panel() {
   swap_bar="$(bar_from_percent "${swap_pct}" 25 "|" "-")"
 
   box_top_full "${fw}"
-  box_row_full "${fw}" " Memory: ${free_total}"
+  box_row_full "${fw}" " Memory: ${free_total}" "${BLD}${YEL}"
   box_sep_full "${fw}"
-  box_row_full "${fw}" " Memory [${mem_bar}] ${mem_used}/${mem_total}MB"
-  box_row_full "${fw}" " Swap   [${swap_bar}] ${swap_used}/${swap_total}MB"
-  box_row_full "${fw}" ""
+  box_row_full "${fw}" " Memory [${mem_bar}] ${mem_used}/${mem_total}MB" "${GRN}"
+  box_row_full "${fw}" " Swap   [${swap_bar}] ${swap_used}/${swap_total}MB" "${MAG}"
+  box_row_full "${fw}" "" "${WHT}"
   box_bottom_full "${fw}"
 }
 
@@ -748,30 +758,38 @@ build_network_panel() {
   [[ -n "${lan3}" ]] || lan3=""
 
   box_top_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " Network:" ""
+  box_row_2col "${c1}" "${c2}" " Network:" "" "${BLD}${YEL}" "${WHT}"
   box_sep_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " LAN:" " WAN:"
+  box_row_2col "${c1}" "${c2}" " LAN:" " WAN:" "${BLD}${CYN}" "${BLD}${CYN}"
   box_sep_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " ${lan1}" " ${wan}"
-  box_row_2col "${c1}" "${c2}" " ${lan2}" ""
-  box_row_2col "${c1}" "${c2}" " ${lan3}" ""
+  box_row_2col "${c1}" "${c2}" " ${lan1}" " ${wan}" "${WHT}" "${WHT}"
+  box_row_2col "${c1}" "${c2}" " ${lan2}" "" "${WHT}" "${WHT}"
+  box_row_2col "${c1}" "${c2}" " ${lan3}" "" "${WHT}" "${WHT}"
   box_bottom_2col "${c1}" "${c2}"
   rm -f "${lan_tmp}"
 }
 
 build_services_panel() {
   local entries_file="$1"
-  local c1=38 c2=9 count=0 unit state
+  local c1=38 c2=9 count=0 unit state status_style
 
   box_top_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " Services:" ""
+  box_row_2col "${c1}" "${c2}" " Services:" "" "${BLD}${YEL}" "${WHT}"
   box_sep_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " UNIT" " STATUS"
+  box_row_2col "${c1}" "${c2}" " UNIT" " STATUS" "${BLD}${CYN}" "${BLD}${CYN}"
   box_sep_2col "${c1}" "${c2}"
 
   while IFS='|' read -r unit state; do
     [[ -n "${unit:-}" ]] || continue
-    box_row_2col "${c1}" "${c2}" " ${unit}" " ${state}"
+    status_style="${WHT}"
+    case "${state}" in
+      running) status_style="${BLD}${GRN}" ;;
+      failed) status_style="${BLD}${RED}" ;;
+      activating|deactivating) status_style="${BLD}${YEL}" ;;
+      stopped|inactive|dead) status_style="${DIM}${WHT}" ;;
+      *) status_style="${BLD}${BLU}" ;;
+    esac
+    box_row_2col "${c1}" "${c2}" " ${unit}" " ${state}" "${WHT}" "${status_style}"
     count=$(( count + 1 ))
   done < "${entries_file}"
 
