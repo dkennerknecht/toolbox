@@ -498,7 +498,7 @@ get_disk_entries() {
     NR>1 && $1 !~ /^(tmpfs|devtmpfs)$/ {
       gsub(/%/,"",$5)
       printf "%s|%s|%s\n", $6, $5, $2
-    }' | head -n 5
+    }' | head -n 5 || true
 }
 
 get_cpu_usage_samples() {
@@ -528,7 +528,7 @@ get_cpu_usage_samples() {
 
 get_lan_lines() {
   if have ip; then
-    ip -o -4 addr show scope global 2>/dev/null | awk '{print $2": "$4}' | head -n 3
+    ip -o -4 addr show scope global 2>/dev/null | awk '{print $2": "$4}' | head -n 3 || true
     return 0
   fi
   echo "n/a"
@@ -536,9 +536,21 @@ get_lan_lines() {
 
 get_service_entries() {
   if have systemctl; then
-    systemctl list-units --type=service --all --no-pager --no-legend --plain 2>/dev/null \
+    systemctl list-units --type=service --all --no-pager --no-legend 2>/dev/null \
       | awk '$1 ~ /\.service$/ {print $1 "|" $4}' \
-      | head -n 18
+      | head -n 18 || true
+    return 0
+  fi
+  if have service; then
+    service --status-all 2>/dev/null | awk '
+      {
+        st=$2
+        gsub(/\[/,"",st)
+        gsub(/\]/,"",st)
+        unit=$4
+        if (st=="+") status="running"; else if (st=="-") status="stopped"; else status="unknown"
+        if (unit != "") print unit ".service|" status
+      }' | head -n 18 || true
     return 0
   fi
   echo "n/a|n/a"
@@ -747,22 +759,48 @@ render_motd() {
 
   print_heading_figlet
 
-  build_general_panel >"${top_l}"
-  build_cpu_panel >"${top_r}"
+  if ! build_general_panel >"${top_l}"; then
+    box_top_full 48 >"${top_l}"
+    box_row_full 48 " General panel unavailable" >>"${top_l}"
+    box_bottom_full 48 >>"${top_l}"
+  fi
+  if ! build_cpu_panel >"${top_r}"; then
+    box_top_full 48 >"${top_r}"
+    box_row_full 48 " CPU panel unavailable" >>"${top_r}"
+    box_bottom_full 48 >>"${top_r}"
+  fi
   paste_panels "${top_l}" "${top_r}"
 
-  build_disk_panel >"${mid_l}"
-  {
+  if ! build_disk_panel >"${mid_l}"; then
+    box_top_full 48 >"${mid_l}"
+    box_row_full 48 " Disk usage unavailable" >>"${mid_l}"
+    box_bottom_full 48 >>"${mid_l}"
+  fi
+  if ! {
     build_memory_panel
     build_network_panel
-  } >"${mid_r}"
+  } >"${mid_r}"; then
+    box_top_full 48 >"${mid_r}"
+    box_row_full 48 " Memory/Network unavailable" >>"${mid_r}"
+    box_bottom_full 48 >>"${mid_r}"
+  fi
   paste_panels "${mid_l}" "${mid_r}"
 
-  get_service_entries >"${svc_all}"
+  if ! get_service_entries >"${svc_all}"; then
+    echo "n/a|n/a" >"${svc_all}"
+  fi
   sed -n '1,9p' "${svc_all}" >"${svc_left}"
   sed -n '10,18p' "${svc_all}" >"${svc_right}"
-  build_services_panel "${svc_left}" >"${bot_l}"
-  build_services_panel "${svc_right}" >"${bot_r}"
+  if ! build_services_panel "${svc_left}" >"${bot_l}"; then
+    box_top_full 48 >"${bot_l}"
+    box_row_full 48 " Services panel unavailable" >>"${bot_l}"
+    box_bottom_full 48 >>"${bot_l}"
+  fi
+  if ! build_services_panel "${svc_right}" >"${bot_r}"; then
+    box_top_full 48 >"${bot_r}"
+    box_row_full 48 " Services panel unavailable" >>"${bot_r}"
+    box_bottom_full 48 >>"${bot_r}"
+  fi
   paste_panels "${bot_l}" "${bot_r}"
 
   printf "\n"
