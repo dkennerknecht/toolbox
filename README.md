@@ -21,7 +21,7 @@
 
 - `setup-zsh.sh`: shared Oh-My-Zsh setup for one or many users
 - `setup-fail2ban.sh`: fail2ban installation + baseline hardening for SSH/web stacks
-- `setup-backup-client.sh`: install and configure Proxmox Backup Client on apt-based systems
+- `setup-backup-client.sh`: install and configure Proxmox Backup Client on apt-based systems with Proxmox-published suites (`bookworm`, `bullseye`, `trixie`)
 
 ## `setup-zsh.sh`
 
@@ -201,6 +201,14 @@ sudo bash setup-fail2ban.sh --interactive --dry-run
 ### Supported package managers
 
 - `apt`
+
+### Supported PBS repository suites
+
+- `bookworm`
+- `bullseye`
+- `trixie`
+
+If your host codename is not one of the suites above (for example Ubuntu `noble`), the script exits with a clear error instead of writing an invalid APT source.
 
 ### Usage
 

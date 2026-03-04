@@ -8,7 +8,8 @@ CONFIG_DIR="${HOME}/.config/proxmox-backup"
 CLIENT_CONF="${CONFIG_DIR}/client.conf"
 EXAMPLE_BACKUP_SCRIPT="/usr/local/bin/pbs-backup-root"
 
-SUPPORTED=("bookworm" "bullseye" "trixie" "jammy" "focal")
+SUPPORTED_SUITES=("bookworm" "bullseye" "trixie")
+REPO_SUITE=""
 
 log()  { echo "[$(date +'%F %T')] $*"; }
 warn() { echo "[$(date +'%F %T')] WARN: $*" >&2; }
@@ -49,18 +50,22 @@ detect_os() {
 
   log "Detected: ${DISTRO} ${CODENAME}"
 
+  REPO_SUITE="${PBS_REPO_SUITE:-${CODENAME}}"
+  if [[ "${REPO_SUITE}" != "${CODENAME}" ]]; then
+    warn "Using override suite '${REPO_SUITE}' from PBS_REPO_SUITE (detected codename: '${CODENAME}')."
+  fi
+
   local supported=0
   local name
-  for name in "${SUPPORTED[@]}"; do
-    if [[ "${name}" == "${CODENAME}" ]]; then
+  for name in "${SUPPORTED_SUITES[@]}"; do
+    if [[ "${name}" == "${REPO_SUITE}" ]]; then
       supported=1
       break
     fi
   done
 
   if [[ "${supported}" -eq 0 ]]; then
-    warn "Distro codename '${CODENAME}' is not officially in the tested list."
-    warn "Continuing anyway..."
+    die "Unsupported PBS APT suite '${REPO_SUITE}' (detected '${CODENAME}'). Supported suites: ${SUPPORTED_SUITES[*]}. Remove ${REPO_FILE} if it contains an invalid suite."
   fi
 }
 
@@ -73,6 +78,22 @@ install_requirements() {
   apt-get install -y curl ca-certificates gnupg
 }
 
+prepare_repo_file_for_bootstrap() {
+  local desired_line backup_file
+  desired_line="deb [signed-by=${KEYRING}] http://download.proxmox.com/debian/pbs-client ${REPO_SUITE} main"
+
+  [[ -f "${REPO_FILE}" ]] || return 0
+
+  if grep -qxF "${desired_line}" "${REPO_FILE}"; then
+    return 0
+  fi
+
+  backup_file="${REPO_FILE}.bak.$(date +%s)"
+  warn "Existing ${REPO_FILE} does not match target suite '${REPO_SUITE}'."
+  warn "Temporarily disabling old file to avoid apt update failures: ${backup_file}"
+  mv "${REPO_FILE}" "${backup_file}"
+}
+
 install_keyring() {
   if [[ -f "${KEYRING}" ]]; then
     log "Proxmox keyring already present at ${KEYRING}"
@@ -80,13 +101,13 @@ install_keyring() {
   fi
 
   local key_url tmp_key
-  key_url="${KEY_URL_BASE}/proxmox-release-${CODENAME}.gpg"
+  key_url="${KEY_URL_BASE}/proxmox-release-${REPO_SUITE}.gpg"
   tmp_key="$(mktemp)"
 
   log "Installing Proxmox keyring from ${key_url}"
   if ! curl -fsSL "${key_url}" -o "${tmp_key}"; then
     rm -f "${tmp_key}"
-    die "Failed to download keyring for codename '${CODENAME}'."
+    die "Failed to download keyring for suite '${REPO_SUITE}'."
   fi
 
   install -D -m 0644 "${tmp_key}" "${KEYRING}"
@@ -95,7 +116,7 @@ install_keyring() {
 
 configure_repo() {
   local repo_line
-  repo_line="deb [signed-by=${KEYRING}] http://download.proxmox.com/debian/pbs-client ${CODENAME} main"
+  repo_line="deb [signed-by=${KEYRING}] http://download.proxmox.com/debian/pbs-client ${REPO_SUITE} main"
 
   log "Configuring repository..."
   if [[ -f "${REPO_FILE}" ]] && grep -qxF "${repo_line}" "${REPO_FILE}"; then
@@ -190,6 +211,7 @@ EOF
 main() {
   need_root
   detect_os
+  prepare_repo_file_for_bootstrap
   install_requirements
   install_keyring
   configure_repo
