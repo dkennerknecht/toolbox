@@ -21,6 +21,7 @@
 
 - `setup-zsh.sh`: shared Oh-My-Zsh setup for one or many users
 - `setup-fail2ban.sh`: fail2ban installation + baseline hardening for SSH/web stacks
+- `setup-backup-client.sh`: install and configure Proxmox Backup Client on apt-based systems
 
 ## `setup-zsh.sh`
 
@@ -185,7 +186,47 @@ sudo bash setup-fail2ban.sh --interactive --dry-run
 - `/etc/fail2ban/filter.d/toolbox-nextcloud.conf` (when Nextcloud jail enabled)
 - `/var/log/fail2ban.log` (created when missing)
 
+## `setup-backup-client.sh`
+
+### What it does
+
+- Installs prerequisites: `curl`, `ca-certificates`, `gnupg`
+- Detects distribution codename from `/etc/os-release` (fallback: `lsb_release`)
+- Installs Proxmox signing key to `/usr/share/keyrings/proxmox-archive-keyring.gpg`
+- Configures APT repository file at `/etc/apt/sources.list.d/pbs-client.list`
+- Installs `proxmox-backup-client`
+- Optionally walks through interactive repository setup and writes `~/.config/proxmox-backup/client.conf`
+- Optionally creates `/usr/local/bin/pbs-backup-root` helper script
+
+### Supported package managers
+
+- `apt`
+
+### Usage
+
+```bash
+sudo bash setup-backup-client.sh
+```
+
+### One-liner download + install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-backup-client.sh | sudo bash
+```
+
+### Interactive behavior
+
+- Installs packages non-interactively
+- Prompts for PBS repository details only when running with an interactive TTY
+
+### Files and paths managed
+
+- `/usr/share/keyrings/proxmox-archive-keyring.gpg`
+- `/etc/apt/sources.list.d/pbs-client.list`
+- `~/.config/proxmox-backup/client.conf` (when repository setup is chosen)
+- `/usr/local/bin/pbs-backup-root` (when example script creation is chosen)
+
 ## Notes
 
-- Both scripts require root privileges (`sudo`).
-- Both scripts are designed to be idempotent and can be re-run.
+- All scripts require root privileges (`sudo`).
+- All scripts are designed to be idempotent and can be re-run.
