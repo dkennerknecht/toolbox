@@ -586,7 +586,7 @@ get_service_entries() {
     done < <(awk '{print $1}' "${unitsfile}" 2>/dev/null)
 
     if [[ -s "${tmpfile}" ]]; then
-      sort -t '|' -k1,1n -k2,2 "${tmpfile}" | awk -F'|' '{print $2 "|" $3}' | head -n 18 || true
+      sort -t '|' -k1,1n -k2,2 "${tmpfile}" | awk -F'|' '{print $2 "|" $3}' || true
     else
       echo "n/a|n/a"
     fi
@@ -604,7 +604,7 @@ get_service_entries() {
         unit=$4
         if (st=="+") status="running"; else if (st=="-") status="stopped"; else status="unknown"
         if (unit != "") print unit ".service|" status
-      }' | head -n 18 || true
+      }' || true
     return 0
   fi
   echo "n/a|n/a"
@@ -771,6 +771,7 @@ build_network_panel() {
 
 build_services_panel() {
   local entries_file="$1"
+  local target_rows="${2:-9}"
   local c1=38 c2=9 count=0 unit state status_style
 
   box_top_2col "${c1}" "${c2}"
@@ -793,7 +794,7 @@ build_services_panel() {
     count=$(( count + 1 ))
   done < "${entries_file}"
 
-  while (( count < 9 )); do
+  while (( count < target_rows )); do
     box_row_2col "${c1}" "${c2}" "" ""
     count=$(( count + 1 ))
   done
@@ -808,6 +809,7 @@ paste_panels() {
 
 render_motd() {
   local top_l top_r mid_l mid_r bot_l bot_r svc_all svc_left svc_right
+  local svc_count svc_rows
 
   top_l="$(mktemp)"
   top_r="$(mktemp)"
@@ -851,14 +853,23 @@ render_motd() {
   if ! get_service_entries >"${svc_all}"; then
     echo "n/a|n/a" >"${svc_all}"
   fi
-  sed -n '1,9p' "${svc_all}" >"${svc_left}"
-  sed -n '10,18p' "${svc_all}" >"${svc_right}"
-  if ! build_services_panel "${svc_left}" >"${bot_l}"; then
+  svc_count="$(awk 'NF>0{c++} END{print c+0}' "${svc_all}")"
+  if (( svc_count < 1 )); then
+    svc_count=1
+  fi
+  svc_rows=$(( (svc_count + 1) / 2 ))
+  if (( svc_rows < 9 )); then
+    svc_rows=9
+  fi
+
+  sed -n "1,${svc_rows}p" "${svc_all}" >"${svc_left}"
+  sed -n "$((svc_rows + 1)),$((svc_rows * 2))p" "${svc_all}" >"${svc_right}"
+  if ! build_services_panel "${svc_left}" "${svc_rows}" >"${bot_l}"; then
     box_top_full 48 >"${bot_l}"
     box_row_full 48 " Services panel unavailable" >>"${bot_l}"
     box_bottom_full 48 >>"${bot_l}"
   fi
-  if ! build_services_panel "${svc_right}" >"${bot_r}"; then
+  if ! build_services_panel "${svc_right}" "${svc_rows}" >"${bot_r}"; then
     box_top_full 48 >"${bot_r}"
     box_row_full 48 " Services panel unavailable" >>"${bot_r}"
     box_bottom_full 48 >>"${bot_r}"
