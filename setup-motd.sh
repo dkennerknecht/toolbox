@@ -534,13 +534,57 @@ get_lan_lines() {
   echo "n/a"
 }
 
+service_prio() {
+  case "$1" in
+    failed) echo 0 ;;
+    activating|deactivating) echo 1 ;;
+    active) echo 2 ;;
+    *) echo 9 ;;
+  esac
+}
+
 get_service_entries() {
+  local only_running=0
+  local tmpfile unitsfile unit act disp p
+
+  if [[ "${1:-}" == "--only-running" ]]; then
+    only_running=1
+  fi
+
   if have systemctl; then
-    systemctl list-units --type=service --all --no-pager --no-legend 2>/dev/null \
-      | awk '$1 ~ /\.service$/ {print $1 "|" $4}' \
-      | head -n 18 || true
+    tmpfile="$(mktemp)"
+    unitsfile="$(mktemp)"
+
+    if ! systemctl list-unit-files --type=service --state=enabled --no-pager --no-legend >"${unitsfile}" 2>/dev/null; then
+      rm -f "${tmpfile}" "${unitsfile}"
+      echo "n/a|n/a"
+      return 0
+    fi
+
+    while IFS= read -r unit; do
+      [[ -n "${unit}" ]] || continue
+      act="$(systemctl is-active "${unit}" 2>/dev/null || true)"
+
+      [[ "${act}" == "inactive" || "${act}" == "dead" ]] && continue
+
+      disp="${act}"
+      [[ "${act}" == "active" ]] && disp="running"
+      [[ ${only_running} -eq 1 && "${disp}" != "running" ]] && continue
+
+      p="$(service_prio "${act}")"
+      printf "%s|%s|%s\n" "${p}" "${unit}" "${disp}" >>"${tmpfile}"
+    done < <(awk '{print $1}' "${unitsfile}" 2>/dev/null)
+
+    if [[ -s "${tmpfile}" ]]; then
+      sort -t '|' -k1,1n -k2,2 "${tmpfile}" | awk -F'|' '{print $2 "|" $3}' | head -n 18 || true
+    else
+      echo "n/a|n/a"
+    fi
+
+    rm -f "${tmpfile}" "${unitsfile}"
     return 0
   fi
+
   if have service; then
     service --status-all 2>/dev/null | awk '
       {
