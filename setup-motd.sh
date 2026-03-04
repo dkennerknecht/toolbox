@@ -359,68 +359,414 @@ LOGO
 LOGO
 }
 
-build_right_panel() {
-  local os uptime mem load procs lan wan
-  local date_line kernel_line
+repeat_char() {
+  local char="$1"
+  local count="$2"
+  local out
+  if (( count <= 0 )); then
+    printf ""
+    return 0
+  fi
+  printf -v out "%*s" "${count}" ""
+  out="${out// /${char}}"
+  printf "%s" "${out}"
+}
 
-  os="$(get_os)"
+fit_cell() {
+  local text="$1"
+  local width="$2"
+  if (( ${#text} > width )); then
+    text="${text:0:width-1}~"
+  fi
+  printf "%-*s" "${width}" "${text}"
+}
+
+box_top_2col() {
+  local w1="$1" w2="$2"
+  printf "┏%s┯%s┓\n" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")"
+}
+
+box_sep_2col() {
+  local w1="$1" w2="$2"
+  printf "┣%s┿%s┫\n" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")"
+}
+
+box_bottom_2col() {
+  local w1="$1" w2="$2"
+  printf "┗%s┷%s┛\n" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")"
+}
+
+box_row_2col() {
+  local w1="$1" w2="$2" c1="$3" c2="$4"
+  printf "┃%s│%s┃\n" "$(fit_cell "${c1}" "${w1}")" "$(fit_cell "${c2}" "${w2}")"
+}
+
+box_top_full() { local w="$1"; printf "┏%s┓\n" "$(repeat_char "━" "${w}")"; }
+box_sep_full() { local w="$1"; printf "┣%s┫\n" "$(repeat_char "━" "${w}")"; }
+box_bottom_full() { local w="$1"; printf "┗%s┛\n" "$(repeat_char "━" "${w}")"; }
+box_row_full() { local w="$1" c="$2"; printf "┃%s┃\n" "$(fit_cell "${c}" "${w}")"; }
+
+bar_from_percent() {
+  local pct="$1" width="$2" full_char="${3:-|}" empty_char="${4:--}"
+  local full_count empty_count
+  if [[ ! "${pct}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    pct="0"
+  fi
+  full_count="$(awk -v p="${pct}" -v w="${width}" 'BEGIN{n=int((p*w)/100+0.5); if(n<0)n=0; if(n>w)n=w; print n}')"
+  empty_count=$(( width - full_count ))
+  printf "%s%s" "$(repeat_char "${full_char}" "${full_count}")" "$(repeat_char "${empty_char}" "${empty_count}")"
+}
+
+get_device_name() {
+  if [[ -r /proc/device-tree/model ]]; then
+    tr -d '\0' </proc/device-tree/model
+    return 0
+  fi
+  if [[ -r /sys/devices/virtual/dmi/id/product_name ]]; then
+    sed -n '1p' /sys/devices/virtual/dmi/id/product_name 2>/dev/null
+    return 0
+  fi
+  echo "$(uname -m 2>/dev/null || echo "n/a")"
+}
+
+get_vcpu_count() {
+  if have nproc; then
+    nproc 2>/dev/null || echo "n/a"
+    return 0
+  fi
+  if [[ -r /proc/cpuinfo ]]; then
+    awk -F: '/^processor/{c++} END{print c+0}' /proc/cpuinfo 2>/dev/null
+    return 0
+  fi
+  echo "n/a"
+}
+
+get_process_split() {
+  if ! have ps; then
+    echo "n/a"
+    return 0
+  fi
+  ps -eo user= 2>/dev/null | awk '
+    {u[$1]++; t++}
+    END{
+      root=u["root"]+0
+      user=t-root
+      if (t>0) {
+        printf "%d (root) %d (user) %d (total)", root, user, t
+      } else {
+        print "n/a"
+      }
+    }'
+}
+
+get_mem_free_total_mb() {
+  awk '
+    /^MemFree:/ {f=$2}
+    /^MemTotal:/ {t=$2}
+    END{
+      if (t>0) printf "%d MB (Free) / %d MB (Total)", int(f/1024), int(t/1024)
+      else print "n/a"
+    }' /proc/meminfo 2>/dev/null || echo "n/a"
+}
+
+get_mem_used_total_mb() {
+  awk '
+    /^MemTotal:/ {t=$2}
+    /^MemAvailable:/ {a=$2}
+    END{
+      if (t>0) {
+        used=t-a
+        printf "%d %d", int(used/1024), int(t/1024)
+      } else print "0 0"
+    }' /proc/meminfo 2>/dev/null || echo "0 0"
+}
+
+get_swap_used_total_mb() {
+  awk '
+    /^SwapTotal:/ {t=$2}
+    /^SwapFree:/ {f=$2}
+    END{
+      if (t>0) {
+        used=t-f
+        printf "%d %d", int(used/1024), int(t/1024)
+      } else print "0 0"
+    }' /proc/meminfo 2>/dev/null || echo "0 0"
+}
+
+get_disk_entries() {
+  df -hP 2>/dev/null | awk '
+    NR>1 && $1 !~ /^(tmpfs|devtmpfs)$/ {
+      gsub(/%/,"",$5)
+      printf "%s|%s|%s\n", $6, $5, $2
+    }' | head -n 5
+}
+
+get_cpu_usage_samples() {
+  if [[ ! -r /proc/stat ]]; then
+    echo "1 0.0"
+    return 0
+  fi
+
+  local s1 s2
+  s1="$(mktemp)"
+  s2="$(mktemp)"
+  awk '/^cpu[0-9]+ /{tot=0; for(i=2;i<=NF;i++) tot+=$i; idle=$5+$6; print $1,tot,idle}' /proc/stat >"${s1}"
+  sleep 0.12
+  awk '/^cpu[0-9]+ /{tot=0; for(i=2;i<=NF;i++) tot+=$i; idle=$5+$6; print $1,tot,idle}' /proc/stat >"${s2}"
+  awk '
+    FNR==NR {t[$1]=$2; i[$1]=$3; next}
+    ($1 in t) {
+      dt=$2-t[$1]
+      di=$3-i[$1]
+      u=(dt>0)?((dt-di)*100/dt):0
+      cpu=$1
+      sub(/^cpu/,"",cpu)
+      printf "%d %.1f\n", cpu+1, u
+    }' "${s1}" "${s2}" | head -n 4
+  rm -f "${s1}" "${s2}"
+}
+
+get_lan_lines() {
+  if have ip; then
+    ip -o -4 addr show scope global 2>/dev/null | awk '{print $2": "$4}' | head -n 3
+    return 0
+  fi
+  echo "n/a"
+}
+
+get_service_entries() {
+  if have systemctl; then
+    systemctl list-units --type=service --all --no-pager --no-legend --plain 2>/dev/null \
+      | awk '$1 ~ /\.service$/ {print $1 "|" $4}' \
+      | head -n 18
+    return 0
+  fi
+  echo "n/a|n/a"
+}
+
+print_heading_figlet() {
+  local host
+  host="$(get_hostname)"
+  if have figlet; then
+    printf "%s%s" "${BLD}${GRN}" ""
+    figlet -w 200 "${host}" 2>/dev/null || figlet -w 200 -f slant "${host}" 2>/dev/null || printf "%s\n" "${host}"
+    printf "%s" "${RST}"
+  else
+    printf "%s%s%s\n" "${BLD}${GRN}" "${host}" "${RST}"
+  fi
+}
+
+build_general_panel() {
+  local c1=11 c2=36
+  local now device distro kernel uptime load mem proc
+
+  now="$(LC_TIME=C date '+%d %B %Y, %I:%M:%S %p' 2>/dev/null || date)"
+  device="$(get_device_name)"
+  distro="$(get_os)"
+  kernel="Linux $(get_kernel)"
   uptime="$(get_uptime_template)"
-  mem="$(get_mem_template)"
   load="$(get_load_template)"
-  procs="$(get_process_count)"
-  read -r lan wan < <(read_network_cache)
+  mem="$(get_mem_free_total_mb)"
+  proc="$(get_process_split)"
 
-  date_line="$(LC_TIME=C date '+%A, %d %B %Y, %I:%M:%S %p' 2>/dev/null || date)"
-  kernel_line="Linux $(uname -r 2>/dev/null || echo "n/a") $(uname -m 2>/dev/null || echo "n/a")"
+  box_top_2col "${c1}" "${c2}"
+  box_row_2col "${c1}" "${c2}" " General:" "${now}"
+  box_sep_2col "${c1}" "${c2}"
+  box_row_2col "${c1}" "${c2}" " Device" "${device}"
+  box_row_2col "${c1}" "${c2}" " Distro" "${distro}"
+  box_row_2col "${c1}" "${c2}" " Kernel" "${kernel}"
+  box_row_2col "${c1}" "${c2}" " Uptime" "${uptime}"
+  box_row_2col "${c1}" "${c2}" "" ""
+  box_row_2col "${c1}" "${c2}" " Load" "${load}"
+  box_row_2col "${c1}" "${c2}" " Memory" "${mem}"
+  box_row_2col "${c1}" "${c2}" " Processes" "${proc}"
+  box_bottom_2col "${c1}" "${c2}"
+}
 
-  printf "%s%s%s\n" "${BLU}${BLD}" "${date_line}" "${RST}"
-  printf "%s%s%s\n" "${BLU}" "${kernel_line}" "${RST}"
-  printf "\n"
-  template_row "OS" "${os}"
-  template_row "Uptime" "${uptime}"
-  template_row "Memory" "${mem}"
-  template_row "Load Averages" "${load}"
-  template_row "Running Processes" "${procs}"
-  template_row "LAN IP Address" "${lan}"
-  template_row "WAN IP Address" "${wan}"
+build_cpu_panel() {
+  local c1=6 c2=41 fw=48
+  local model vcpu load model_line2 usage_tmp
+
+  model="$(get_cpu_model)"
+  vcpu="$(get_vcpu_count)"
+  load="$(get_load_template)"
+  model_line2="(${vcpu} vCPU)"
+  usage_tmp="$(mktemp)"
+  get_cpu_usage_samples >"${usage_tmp}"
+
+  box_top_2col "${c1}" "${c2}"
+  box_row_2col "${c1}" "${c2}" " CPU:" "${model}"
+  box_row_2col "${c1}" "${c2}" "" "${model_line2}"
+  box_sep_full "${fw}"
+  box_row_full "${fw}" " Load ${load}"
+  box_sep_full "${fw}"
+
+  local idx pct bar
+  while read -r idx pct; do
+    [[ -n "${idx:-}" ]] || continue
+    bar="$(bar_from_percent "${pct}" 30 "|" "-")"
+    box_row_full "${fw}" " CPU ${idx} [${bar}] $(printf '%5.1f' "${pct}")%"
+  done < "${usage_tmp}"
+
+  # keep panel height stable
+  local lines
+  lines="$(wc -l < "${usage_tmp}" | awk '{print $1}')"
+  while (( lines < 4 )); do
+    box_row_full "${fw}" ""
+    lines=$(( lines + 1 ))
+  done
+
+  box_row_full "${fw}" ""
+  box_bottom_full "${fw}"
+  rm -f "${usage_tmp}"
+}
+
+build_disk_panel() {
+  local fw=48
+  local count=0 body_rows=0 mount pct size bar
+
+  box_top_full "${fw}"
+  box_row_full "${fw}" " Disk usage:"
+  box_sep_full "${fw}"
+
+  while IFS='|' read -r mount pct size; do
+    [[ -n "${mount:-}" ]] || continue
+    bar="$(bar_from_percent "${pct}" 42 "=" "-")"
+    box_row_full "${fw}" " ${mount} ${pct}% used out of ${size}"
+    box_row_full "${fw}" " [${bar}]"
+    count=$(( count + 1 ))
+    body_rows=$(( body_rows + 2 ))
+  done < <(get_disk_entries)
+
+  while (( body_rows < 12 )); do
+    box_row_full "${fw}" ""
+    body_rows=$(( body_rows + 1 ))
+  done
+
+  box_bottom_full "${fw}"
+}
+
+build_memory_panel() {
+  local fw=48
+  local free_total mem_used mem_total swap_used swap_total mem_pct swap_pct mem_bar swap_bar
+
+  free_total="$(get_mem_free_total_mb)"
+  read -r mem_used mem_total < <(get_mem_used_total_mb)
+  read -r swap_used swap_total < <(get_swap_used_total_mb)
+
+  mem_pct=0
+  swap_pct=0
+  if [[ "${mem_total}" =~ ^[0-9]+$ ]] && (( mem_total > 0 )); then
+    mem_pct="$(awk -v u="${mem_used}" -v t="${mem_total}" 'BEGIN{print (u*100)/t}')"
+  fi
+  if [[ "${swap_total}" =~ ^[0-9]+$ ]] && (( swap_total > 0 )); then
+    swap_pct="$(awk -v u="${swap_used}" -v t="${swap_total}" 'BEGIN{print (u*100)/t}')"
+  fi
+
+  mem_bar="$(bar_from_percent "${mem_pct}" 25 "|" "-")"
+  swap_bar="$(bar_from_percent "${swap_pct}" 25 "|" "-")"
+
+  box_top_full "${fw}"
+  box_row_full "${fw}" " Memory: ${free_total}"
+  box_sep_full "${fw}"
+  box_row_full "${fw}" " Memory [${mem_bar}] ${mem_used}/${mem_total}MB"
+  box_row_full "${fw}" " Swap   [${swap_bar}] ${swap_used}/${swap_total}MB"
+  box_row_full "${fw}" ""
+  box_bottom_full "${fw}"
+}
+
+build_network_panel() {
+  local c1=26 c2=21
+  local lan_tmp wan lan1 lan2 lan3
+
+  lan_tmp="$(mktemp)"
+  get_lan_lines >"${lan_tmp}"
+  read -r _ wan < <(read_network_cache)
+  [[ -n "${wan:-}" ]] || wan="n/a"
+
+  lan1="$(sed -n '1p' "${lan_tmp}")"
+  lan2="$(sed -n '2p' "${lan_tmp}")"
+  lan3="$(sed -n '3p' "${lan_tmp}")"
+  [[ -n "${lan1}" ]] || lan1="n/a"
+  [[ -n "${lan2}" ]] || lan2=""
+  [[ -n "${lan3}" ]] || lan3=""
+
+  box_top_2col "${c1}" "${c2}"
+  box_row_2col "${c1}" "${c2}" " Network:" ""
+  box_sep_2col "${c1}" "${c2}"
+  box_row_2col "${c1}" "${c2}" " LAN:" " WAN:"
+  box_sep_2col "${c1}" "${c2}"
+  box_row_2col "${c1}" "${c2}" " ${lan1}" " ${wan}"
+  box_row_2col "${c1}" "${c2}" " ${lan2}" ""
+  box_row_2col "${c1}" "${c2}" " ${lan3}" ""
+  box_bottom_2col "${c1}" "${c2}"
+  rm -f "${lan_tmp}"
+}
+
+build_services_panel() {
+  local entries_file="$1"
+  local c1=38 c2=9 count=0 unit state
+
+  box_top_2col "${c1}" "${c2}"
+  box_row_2col "${c1}" "${c2}" " Services:" ""
+  box_sep_2col "${c1}" "${c2}"
+  box_row_2col "${c1}" "${c2}" " UNIT" " STATUS"
+  box_sep_2col "${c1}" "${c2}"
+
+  while IFS='|' read -r unit state; do
+    [[ -n "${unit:-}" ]] || continue
+    box_row_2col "${c1}" "${c2}" " ${unit}" " ${state}"
+    count=$(( count + 1 ))
+  done < "${entries_file}"
+
+  while (( count < 9 )); do
+    box_row_2col "${c1}" "${c2}" "" ""
+    count=$(( count + 1 ))
+  done
+
+  box_bottom_2col "${c1}" "${c2}"
+}
+
+paste_panels() {
+  local left="$1" right="$2"
+  paste -d $'\t' "${left}" "${right}" | sed $'s/\t/ /'
 }
 
 render_motd() {
-  local logo_tmp right_tmp logo_w logo_mode
+  local top_l top_r mid_l mid_r bot_l bot_r svc_all svc_left svc_right
 
-  logo_tmp="$(mktemp)"
-  right_tmp="$(mktemp)"
+  top_l="$(mktemp)"
+  top_r="$(mktemp)"
+  mid_l="$(mktemp)"
+  mid_r="$(mktemp)"
+  bot_l="$(mktemp)"
+  bot_r="$(mktemp)"
+  svc_all="$(mktemp)"
+  svc_left="$(mktemp)"
+  svc_right="$(mktemp)"
 
-  print_logo_ascii >"${logo_tmp}"
-  build_right_panel >"${right_tmp}"
+  print_heading_figlet
 
-  logo_w="$(awk '{ if (length > w) w=length } END { print w+0 }' "${logo_tmp}")"
-  logo_mode="other"
-  if is_rpi; then
-    logo_mode="rpi"
-  elif [[ "$(get_os_id)" == "debian" ]] && is_intel; then
-    logo_mode="debian"
-  fi
+  build_general_panel >"${top_l}"
+  build_cpu_panel >"${top_r}"
+  paste_panels "${top_l}" "${top_r}"
 
-  paste -d $'\t' \
-    <(awk -v w="${logo_w}" -v mode="${logo_mode}" -v bld="${BLD}" -v grn="${GRN}" -v yel="${YEL}" -v red="${RED}" -v blu="${BLU}" -v rst="${RST}" '
-      {
-        if (mode == "rpi") {
-          if (NR <= 4) c = bld grn
-          else if (NR <= 6) c = bld yel
-          else c = bld red
-        } else if (mode == "debian") {
-          c = bld red
-        } else {
-          c = bld blu
-        }
-        printf "%s%-*s%s\n", c, w, $0, rst
-      }' "${logo_tmp}") \
-    "${right_tmp}" \
-    | sed $'s/\t/    /'
+  build_disk_panel >"${mid_l}"
+  {
+    build_memory_panel
+    build_network_panel
+  } >"${mid_r}"
+  paste_panels "${mid_l}" "${mid_r}"
+
+  get_service_entries >"${svc_all}"
+  sed -n '1,9p' "${svc_all}" >"${svc_left}"
+  sed -n '10,18p' "${svc_all}" >"${svc_right}"
+  build_services_panel "${svc_left}" >"${bot_l}"
+  build_services_panel "${svc_right}" >"${bot_r}"
+  paste_panels "${bot_l}" "${bot_r}"
 
   printf "\n"
-  rm -f "${logo_tmp}" "${right_tmp}"
+  rm -f "${top_l}" "${top_r}" "${mid_l}" "${mid_r}" "${bot_l}" "${bot_r}" "${svc_all}" "${svc_left}" "${svc_right}"
 }
 
 install_motd() {
