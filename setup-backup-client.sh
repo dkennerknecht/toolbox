@@ -14,6 +14,8 @@ CLIENT_PACKAGE=""
 DISTRO=""
 CODENAME=""
 ARCH=""
+OVERRIDE_SUITE=""
+OVERRIDE_CLIENT_PACKAGE=""
 
 log()  { echo "[$(date +'%F %T')] $*"; }
 warn() { echo "[$(date +'%F %T')] WARN: $*" >&2; }
@@ -36,6 +38,38 @@ prompt_yes_no() {
   [[ "${answer}" =~ ^[Yy]$ ]]
 }
 
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --suite)
+        OVERRIDE_SUITE="${2:-}"
+        [[ -n "${OVERRIDE_SUITE}" ]] || die "--suite requires a value."
+        shift 2
+        ;;
+      --client-package)
+        OVERRIDE_CLIENT_PACKAGE="${2:-}"
+        [[ -n "${OVERRIDE_CLIENT_PACKAGE}" ]] || die "--client-package requires a value."
+        shift 2
+        ;;
+      -h|--help)
+        cat <<'EOF'
+Usage:
+  sudo bash setup-backup-client.sh [options]
+
+Options:
+  --suite <name>           Override PBS APT suite (bookworm|bullseye|trixie)
+  --client-package <name>  Override package (proxmox-backup-client or proxmox-backup-client-static)
+  -h, --help               Show this help
+EOF
+        exit 0
+        ;;
+      *)
+        die "Unknown argument: $1"
+        ;;
+    esac
+  done
+}
+
 detect_os() {
   log "Detecting OS..."
 
@@ -56,9 +90,13 @@ detect_os() {
 
   log "Detected: ${DISTRO} ${CODENAME} (${ARCH})"
 
-  REPO_SUITE="${PBS_REPO_SUITE:-${CODENAME}}"
+  REPO_SUITE="${OVERRIDE_SUITE:-${PBS_REPO_SUITE:-${CODENAME}}}"
   if [[ "${REPO_SUITE}" != "${CODENAME}" ]]; then
-    warn "Using override suite '${REPO_SUITE}' from PBS_REPO_SUITE (detected codename: '${CODENAME}')."
+    if [[ -n "${OVERRIDE_SUITE}" ]]; then
+      warn "Using override suite '${REPO_SUITE}' from --suite (detected codename: '${CODENAME}')."
+    else
+      warn "Using override suite '${REPO_SUITE}' from PBS_REPO_SUITE (detected codename: '${CODENAME}')."
+    fi
   fi
 
   local supported=0
@@ -74,7 +112,9 @@ detect_os() {
     die "Unsupported PBS APT suite '${REPO_SUITE}' (detected '${CODENAME}'). Supported suites: ${SUPPORTED_SUITES[*]}. For unsupported hosts (for example Ubuntu noble), explicitly set PBS_REPO_SUITE=trixie. Remove ${REPO_FILE} if it contains an invalid suite."
   fi
 
-  if [[ -n "${PBS_CLIENT_PACKAGE:-}" ]]; then
+  if [[ -n "${OVERRIDE_CLIENT_PACKAGE}" ]]; then
+    CLIENT_PACKAGE="${OVERRIDE_CLIENT_PACKAGE}"
+  elif [[ -n "${PBS_CLIENT_PACKAGE:-}" ]]; then
     CLIENT_PACKAGE="${PBS_CLIENT_PACKAGE}"
   elif [[ "${DISTRO}" == "debian" && "${REPO_SUITE}" == "${CODENAME}" ]]; then
     CLIENT_PACKAGE="proxmox-backup-client"
@@ -235,6 +275,7 @@ EOF
 }
 
 main() {
+  parse_args "$@"
   need_root
   detect_os
   prepare_repo_file_for_bootstrap

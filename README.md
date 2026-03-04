@@ -214,6 +214,12 @@ If your host codename is not one of the suites above (for example Ubuntu `noble`
 sudo PBS_REPO_SUITE=trixie bash setup-backup-client.sh
 ```
 
+or use the explicit CLI flag:
+
+```bash
+sudo bash setup-backup-client.sh --suite trixie
+```
+
 The script also:
 
 - Requires `amd64` architecture (as currently published by the upstream repo)
