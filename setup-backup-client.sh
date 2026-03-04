@@ -10,6 +10,10 @@ EXAMPLE_BACKUP_SCRIPT="/usr/local/bin/pbs-backup-root"
 
 SUPPORTED_SUITES=("bookworm" "bullseye" "trixie")
 REPO_SUITE=""
+CLIENT_PACKAGE=""
+DISTRO=""
+CODENAME=""
+ARCH=""
 
 log()  { echo "[$(date +'%F %T')] $*"; }
 warn() { echo "[$(date +'%F %T')] WARN: $*" >&2; }
@@ -41,14 +45,16 @@ detect_os() {
 
   DISTRO="${ID:-unknown}"
   CODENAME="${VERSION_CODENAME:-}"
+  ARCH="$(dpkg --print-architecture 2>/dev/null || uname -m)"
 
   if [[ -z "${CODENAME}" ]] && have lsb_release; then
     CODENAME="$(lsb_release -cs 2>/dev/null || true)"
   fi
 
   [[ -n "${CODENAME}" ]] || die "Could not determine distro codename."
+  [[ "${ARCH}" == "amd64" || "${ARCH}" == "x86_64" ]] || die "Unsupported architecture '${ARCH}'. Proxmox PBS client repository currently publishes amd64 packages only."
 
-  log "Detected: ${DISTRO} ${CODENAME}"
+  log "Detected: ${DISTRO} ${CODENAME} (${ARCH})"
 
   REPO_SUITE="${PBS_REPO_SUITE:-${CODENAME}}"
   if [[ "${REPO_SUITE}" != "${CODENAME}" ]]; then
@@ -65,8 +71,19 @@ detect_os() {
   done
 
   if [[ "${supported}" -eq 0 ]]; then
-    die "Unsupported PBS APT suite '${REPO_SUITE}' (detected '${CODENAME}'). Supported suites: ${SUPPORTED_SUITES[*]}. Remove ${REPO_FILE} if it contains an invalid suite."
+    die "Unsupported PBS APT suite '${REPO_SUITE}' (detected '${CODENAME}'). Supported suites: ${SUPPORTED_SUITES[*]}. For unsupported hosts (for example Ubuntu noble), explicitly set PBS_REPO_SUITE=trixie. Remove ${REPO_FILE} if it contains an invalid suite."
   fi
+
+  if [[ -n "${PBS_CLIENT_PACKAGE:-}" ]]; then
+    CLIENT_PACKAGE="${PBS_CLIENT_PACKAGE}"
+  elif [[ "${DISTRO}" == "debian" && "${REPO_SUITE}" == "${CODENAME}" ]]; then
+    CLIENT_PACKAGE="proxmox-backup-client"
+  else
+    # Cross-distro/suite installs are more robust with static linking.
+    CLIENT_PACKAGE="proxmox-backup-client-static"
+  fi
+
+  log "Selected client package: ${CLIENT_PACKAGE}"
 }
 
 install_requirements() {
@@ -131,8 +148,17 @@ install_client() {
   log "Updating package lists..."
   apt-get update
 
-  log "Installing proxmox-backup-client..."
-  apt-get install -y proxmox-backup-client
+  log "Installing ${CLIENT_PACKAGE}..."
+  if apt-get install -y "${CLIENT_PACKAGE}"; then
+    return 0
+  fi
+
+  if [[ "${CLIENT_PACKAGE}" == "proxmox-backup-client" ]]; then
+    warn "Failed to install proxmox-backup-client; retrying with proxmox-backup-client-static."
+    apt-get install -y proxmox-backup-client-static
+  else
+    die "Failed to install ${CLIENT_PACKAGE}."
+  fi
 }
 
 configure_repository() {

@@ -194,7 +194,7 @@ sudo bash setup-fail2ban.sh --interactive --dry-run
 - Detects distribution codename from `/etc/os-release` (fallback: `lsb_release`)
 - Installs Proxmox signing key to `/usr/share/keyrings/proxmox-archive-keyring.gpg`
 - Configures APT repository file at `/etc/apt/sources.list.d/pbs-client.list`
-- Installs `proxmox-backup-client`
+- Installs `proxmox-backup-client` (or `proxmox-backup-client-static` on non-Debian / cross-suite installs)
 - Optionally walks through interactive repository setup and writes `~/.config/proxmox-backup/client.conf`
 - Optionally creates `/usr/local/bin/pbs-backup-root` helper script
 
@@ -208,7 +208,16 @@ sudo bash setup-fail2ban.sh --interactive --dry-run
 - `bullseye`
 - `trixie`
 
-If your host codename is not one of the suites above (for example Ubuntu `noble`), the script exits with a clear error instead of writing an invalid APT source.
+If your host codename is not one of the suites above (for example Ubuntu `noble`), set `PBS_REPO_SUITE` explicitly:
+
+```bash
+sudo PBS_REPO_SUITE=trixie bash setup-backup-client.sh
+```
+
+The script also:
+
+- Requires `amd64` architecture (as currently published by the upstream repo)
+- Uses `proxmox-backup-client-static` by default on non-Debian / cross-suite installs for compatibility
 
 ### Usage
 
