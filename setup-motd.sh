@@ -383,36 +383,36 @@ fit_cell() {
 
 box_top_2col() {
   local w1="$1" w2="$2"
-  printf "%s┏%s┯%s┓%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
+  printf "%s┏%s┯%s┓%s\n" "${BLD}${WHT}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
 }
 
 box_sep_2col() {
   local w1="$1" w2="$2"
-  printf "%s┣%s┿%s┫%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
+  printf "%s┣%s┿%s┫%s\n" "${BLD}${WHT}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
 }
 
 box_bottom_2col() {
   local w1="$1" w2="$2"
-  printf "%s┗%s┷%s┛%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
+  printf "%s┗%s┷%s┛%s\n" "${BLD}${WHT}" "$(repeat_char "━" "${w1}")" "$(repeat_char "━" "${w2}")" "${RST}"
 }
 
 box_row_2col() {
   local w1="$1" w2="$2" c1="$3" c2="$4"
-  local s1="${5:-${WHT}}" s2="${6:-${WHT}}"
+  local s1="${5:-${BLD}${WHT}}" s2="${6:-${BLD}${WHT}}"
   local p1 p2 bc
   p1="$(fit_cell "${c1}" "${w1}")"
   p2="$(fit_cell "${c2}" "${w2}")"
-  bc="${DIM}${CYN}"
+  bc="${BLD}${WHT}"
   printf "%s┃%s%s%s%s│%s%s%s%s┃%s\n" "${bc}" "${s1}" "${p1}" "${RST}" "${bc}" "${s2}" "${p2}" "${RST}" "${bc}" "${RST}"
 }
 
-box_top_full() { local w="$1"; printf "%s┏%s┓%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w}")" "${RST}"; }
-box_sep_full() { local w="$1"; printf "%s┣%s┫%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w}")" "${RST}"; }
-box_bottom_full() { local w="$1"; printf "%s┗%s┛%s\n" "${DIM}${CYN}" "$(repeat_char "━" "${w}")" "${RST}"; }
+box_top_full() { local w="$1"; printf "%s┏%s┓%s\n" "${BLD}${WHT}" "$(repeat_char "━" "${w}")" "${RST}"; }
+box_sep_full() { local w="$1"; printf "%s┣%s┫%s\n" "${BLD}${WHT}" "$(repeat_char "━" "${w}")" "${RST}"; }
+box_bottom_full() { local w="$1"; printf "%s┗%s┛%s\n" "${BLD}${WHT}" "$(repeat_char "━" "${w}")" "${RST}"; }
 box_row_full() {
-  local w="$1" c="$2" s="${3:-${WHT}}" p bc
+  local w="$1" c="$2" s="${3:-${BLD}${WHT}}" p bc
   p="$(fit_cell "${c}" "${w}")"
-  bc="${DIM}${CYN}"
+  bc="${BLD}${WHT}"
   printf "%s┃%s%s%s%s┃%s\n" "${bc}" "${s}" "${p}" "${RST}" "${bc}" "${RST}"
 }
 
@@ -636,7 +636,7 @@ build_general_panel() {
   proc="$(get_process_split)"
 
   box_top_2col "${c1}" "${c2}"
-  box_row_2col "${c1}" "${c2}" " General:" "${now}" "${BLD}${YEL}" "${BLD}${BLU}"
+  box_row_2col "${c1}" "${c2}" " General:" "${now}" "${BLD}${YEL}" "${BLD}${CYN}"
   box_sep_2col "${c1}" "${c2}"
   box_row_2col "${c1}" "${c2}" " Device" "${device}" "${BLD}${CYN}" "${WHT}"
   box_row_2col "${c1}" "${c2}" " Distro" "${distro}" "${BLD}${CYN}" "${WHT}"
@@ -699,7 +699,7 @@ build_disk_panel() {
     [[ -n "${mount:-}" ]] || continue
     bar="$(bar_from_percent "${pct}" 42 "=" "-")"
     box_row_full "${fw}" " ${mount} ${pct}% used out of ${size}" "${WHT}"
-    box_row_full "${fw}" " [${bar}]" "${YEL}"
+    box_row_full "${fw}" " [${bar}]" "${BLD}${YEL}"
     count=$(( count + 1 ))
     body_rows=$(( body_rows + 2 ))
   done < <(get_disk_entries)
@@ -786,8 +786,8 @@ build_services_panel() {
       running) status_style="${BLD}${GRN}" ;;
       failed) status_style="${BLD}${RED}" ;;
       activating|deactivating) status_style="${BLD}${YEL}" ;;
-      stopped|inactive|dead) status_style="${DIM}${WHT}" ;;
-      *) status_style="${BLD}${BLU}" ;;
+      stopped|inactive|dead) status_style="${BLD}${YEL}" ;;
+      *) status_style="${BLD}${MAG}" ;;
     esac
     box_row_2col "${c1}" "${c2}" " ${unit}" " ${state}" "${WHT}" "${status_style}"
     count=$(( count + 1 ))
