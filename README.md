@@ -21,6 +21,7 @@
 
 - `setup-zsh.sh`: shared Oh-My-Zsh setup for one or many users
 - `setup-fail2ban.sh`: fail2ban installation + baseline hardening for SSH/web stacks
+- `setup-motd.sh`: fast, colored MOTD setup for Debian/Raspberry Pi systems
 - `setup-backup-client.sh`: install and configure Proxmox Backup Client on apt-based systems with Proxmox-published suites (`bookworm`, `bullseye`, `trixie`)
 
 ## Quick Install Commands
@@ -28,6 +29,7 @@
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-zsh.sh | sudo bash
 curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-fail2ban.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-motd.sh | sudo bash
 curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-backup-client.sh | sudo bash
 ```
 
