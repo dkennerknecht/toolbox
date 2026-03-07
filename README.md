@@ -23,6 +23,14 @@
 - `setup-fail2ban.sh`: fail2ban installation + baseline hardening for SSH/web stacks
 - `setup-backup-client.sh`: install and configure Proxmox Backup Client on apt-based systems with Proxmox-published suites (`bookworm`, `bullseye`, `trixie`)
 
+## Quick Install Commands
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-zsh.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-fail2ban.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-backup-client.sh | sudo bash
+```
+
 ## `setup-zsh.sh`
 
 ### What it does
@@ -67,12 +75,12 @@ curl -fsSL https://raw.githubusercontent.com/dkennerknecht/toolbox/main/setup-zs
 
 ### Default behavior
 
-- If no user option is given, target is `SUDO_USER` (if set and not `root`), otherwise `root`.
+- If no user option is given, target is `root` + all local "real" users (UID >= 1000, valid shell, existing home).
 
 ### Examples
 
 ```bash
-# Default target user (SUDO_USER or root)
+# Default target: root + all regular users
 sudo bash setup-zsh.sh
 
 # Multiple explicit users

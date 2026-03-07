@@ -12,12 +12,13 @@ set -euo pipefail
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/<YOU>/<REPO>/main/install.sh | sudo bash
+#   # default behavior: --all-users
 #   curl -fsSL https://raw.githubusercontent.com/<YOU>/<REPO>/main/install.sh | sudo bash -s -- --all-users
 #   curl -fsSL https://raw.githubusercontent.com/<YOU>/<REPO>/main/install.sh | sudo bash -s -- --users "alice,bob"
 #   curl -fsSL https://raw.githubusercontent.com/<YOU>/<REPO>/main/install.sh | sudo bash -s -- --no-chsh
 #   curl -fsSL https://raw.githubusercontent.com/<YOU>/<REPO>/main/install.sh | sudo bash -s -- --dry-run
 
-MODE="default"
+MODE="all"
 USERS_CSV=""
 CHSH_ENABLE=1
 DRY_RUN=0
@@ -137,7 +138,7 @@ parse_args() {
 Usage:
   sudo bash install.sh [--users "alice,bob"] [--all-users] [--no-chsh] [--dry-run]
 
-Default: installs for invoking user (SUDO_USER if available, else root).
+Default: installs for root + all "real" users (UID >= 1000).
 --users: install for a comma-separated list of users
 --all-users: install for root + all "real" users (UID >= 1000)
 --no-chsh: do not change default shell
@@ -166,13 +167,6 @@ list_target_users() {
   local users=()
 
   case "$MODE" in
-    default)
-      if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
-        users+=("${SUDO_USER}")
-      else
-        users+=("root")
-      fi
-      ;;
     users)
       IFS=',' read -r -a users <<<"$USERS_CSV"
       ;;
