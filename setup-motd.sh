@@ -419,12 +419,25 @@ box_row_full() {
 bar_from_percent() {
   local pct="$1" width="$2" full_char="${3:-|}" empty_char="${4:--}"
   local full_count empty_count
-  if [[ ! "${pct}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-    pct="0"
-  fi
+  pct="$(sanitize_percent "${pct}")"
   full_count="$(awk -v p="${pct}" -v w="${width}" 'BEGIN{n=int((p*w)/100+0.5); if(n<0)n=0; if(n>w)n=w; print n}')"
   empty_count=$(( width - full_count ))
   printf "%s%s" "$(repeat_char "${full_char}" "${full_count}")" "$(repeat_char "${empty_char}" "${empty_count}")"
+}
+
+sanitize_percent() {
+  local value="${1:-0}"
+  value="${value//,/.}"
+  if [[ ! "${value}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    value="0"
+  fi
+  printf "%s" "${value}"
+}
+
+format_percent_1d() {
+  local value
+  value="$(sanitize_percent "${1:-0}")"
+  LC_NUMERIC=C printf "%5.1f" "${value}"
 }
 
 get_device_name() {
@@ -670,8 +683,9 @@ build_cpu_panel() {
   local idx pct bar
   while read -r idx pct; do
     [[ -n "${idx:-}" ]] || continue
+    pct="$(sanitize_percent "${pct}")"
     bar="$(bar_from_percent "${pct}" 30 "|" "-")"
-    box_row_full "${fw}" " CPU ${idx} [${bar}] $(printf '%5.1f' "${pct}")%" "${GRN}"
+    box_row_full "${fw}" " CPU ${idx} [${bar}] $(format_percent_1d "${pct}")%" "${GRN}"
   done < "${usage_tmp}"
 
   # keep panel height stable
